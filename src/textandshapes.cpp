@@ -1,8 +1,13 @@
-#include "text.h"
-#include "gameshapes.h"
-#include "transform2d.h"
+#include "picovectorscope.h"
 
-void coolDemo2(DisplayList& displayList, float dt)
+class TextAndShapes : public Demo
+{
+public:
+    void UpdateAndRender(DisplayList& displayList, float dt);
+};
+static TextAndShapes s_textAndShapes;
+
+void TextAndShapes::UpdateAndRender(DisplayList& displayList, float dt)
 {
     static float phase = 0.f;
     phase += dt * 4;

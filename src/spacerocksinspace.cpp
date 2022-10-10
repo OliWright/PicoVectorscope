@@ -1,8 +1,4 @@
-#include "text.h"
-#include "gameshapes.h"
-#include "transform2d.h"
-#include "buttons.h"
-#include "pico/stdlib.h"
+#include "picovectorscope.h"
 
 //
 // Constants
@@ -733,7 +729,14 @@ uint GameState::s_level;
 // Initialisation
 //
 
-void coolDemo4(DisplayList& displayList, float dt)
+class SpaceRocksInSpace : public Demo
+{
+public:
+    void UpdateAndRender(DisplayList& displayList, float dt);
+};
+static SpaceRocksInSpace s_spaceRocksInSpace;
+
+void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
 {
     GameState::Update(GameState::Duration(dt));
 

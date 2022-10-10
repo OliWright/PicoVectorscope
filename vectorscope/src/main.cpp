@@ -6,6 +6,8 @@
 #include "fixedpoint.h"
 #include "ledstatus.h"
 #include "buttons.h"
+#include "demo.h"
+
 #include "math.h"
 #include "pico/multicore.h"
 #include "pico/mutex.h"
@@ -22,7 +24,7 @@ static volatile bool dacOutputRunning = false;
 static constexpr uint64_t kNumMicrosBetweenFrames = 16667; // 60FPS
 //static constexpr uint64_t kNumMicrosBetweenFrames = 10000; // 100FPS
 static constexpr uint32_t kGeneralPurposeButtonPin = 20;
-static uint32_t coolDemoIdx = 4;
+static uint32_t coolDemoIdx = 0;
 
 static inline uint32_t floatToOut(const float v)
 {
@@ -36,17 +38,34 @@ static inline uint32_t floatToOut(const float v)
 float sinTable[kSinTableSize];
 uint32_t intSinTable[kSinTableSize];
 
-extern void coolDemo0(DisplayList& displayList, float dt);
-extern void coolDemo1(DisplayList& displayList, float dt);
-extern void coolDemo2(DisplayList& displayList, float dt);
-extern void coolDemo3(DisplayList& displayList, float dt);
-extern void coolDemo4(DisplayList& displayList, float dt);
+constexpr uint kMaxDemos = 16;
+static Demo* s_demos[kMaxDemos] = {};
+static uint s_numDemos = 0;
+
+Demo::Demo(int order)
+: m_order(order)
+{
+    uint demoInsertion = 0;
+    for(; demoInsertion < s_numDemos; ++demoInsertion)
+    {
+        if(order < s_demos[demoInsertion]->m_order)
+        {
+            break;
+        }
+    }
+    ++s_numDemos;
+    for(uint i = s_numDemos - 1; i > demoInsertion; ++i)
+    {
+        s_demos[i] = s_demos[i-1];
+    }
+    s_demos[demoInsertion] = this;
+}
 
 void checkButton()
 {
     if((Buttons::HoldTimeMs(Buttons::Id::Left) > 500) && (Buttons::HoldTimeMs(Buttons::Id::Right) > 500) && Buttons::IsJustPressed(Buttons::Id::Fire))
     {
-        if(coolDemoIdx == 4)
+        if(coolDemoIdx == s_numDemos)
         {
             coolDemoIdx = 0;
         }
@@ -104,24 +123,7 @@ void displayListUpdateLoop()
 
     Buttons::Update();
 
-    switch(coolDemoIdx)
-    {
-        case 0:
-            coolDemo0(displayList, 0.0167f);
-            break;
-        case 1:
-            coolDemo1(displayList, 0.0167f);
-            break;
-        case 2:
-            coolDemo2(displayList, 0.0167f);
-            break;
-        case 3:
-            coolDemo3(displayList, 0.0167f);
-            break;
-        case 4:
-            coolDemo4(displayList, 0.0167f);
-            break;
-    }
+    s_demos[coolDemoIdx]->UpdateAndRender(displayList, 0.0167f);
 
     // Unlock it so that the display output knows it's ready
     LOG_INFO("DLE: %d\n", displayListIdx);

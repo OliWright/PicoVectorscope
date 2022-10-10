@@ -1,5 +1,4 @@
-#include "shapes.h"
-#include "transform2d.h"
+#include "picovectorscope.h"
 
 static const ShapeVector2 points[] = {
     ShapeVector2(-1, -1),
@@ -9,7 +8,14 @@ static const ShapeVector2 points[] = {
 };
 static const uint32_t kNumPoints = sizeof(points) / sizeof(points[0]);
 
-void coolDemo0(DisplayList& displayList, float dt)
+class Spiral : public Demo
+{
+public:
+    void UpdateAndRender(DisplayList& displayList, float dt);
+};
+static Spiral s_spiral;
+
+void Spiral::UpdateAndRender(DisplayList& displayList, float dt)
 {
     static float phase = 0.f;
     phase += dt * 2;

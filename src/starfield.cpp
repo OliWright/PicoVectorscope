@@ -1,6 +1,4 @@
-#include "log.h"
-#include "displaylist.h"
-#include "transform2d.h"
+#include "picovectorscope.h"
 
 static constexpr uint32_t kNumStars = 512;
 typedef FixedPoint<7, int16_t, int32_t, false> StarCoordScalar;
@@ -14,7 +12,15 @@ static StarCoord s_stars[kNumStars];
 //static constexpr StarCoordScalar kStarSpeed(3.f);
 static constexpr StarCoordScalar kStarSpeed(2.f);
 
-void coolDemo3(DisplayList& displayList, float dt)
+class Starfield : public Demo
+{
+public:
+    void UpdateAndRender(DisplayList& displayList, float dt);
+};
+static Starfield s_starfield;
+
+void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
+
 {
     static bool doneInit = false;
     if(!doneInit)

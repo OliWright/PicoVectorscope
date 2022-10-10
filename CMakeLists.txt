@@ -31,11 +31,11 @@ add_executable(${PROJECT_NAME})
 include(vectorscope/vectorscope.cmake)
 
 target_sources(${PROJECT_NAME} PRIVATE
-        src/cooldemo0.cpp
-        src/cooldemo1.cpp
-        src/cooldemo2.cpp
-        src/cooldemo3.cpp
-        src/cooldemo4.cpp
+        src/spacerocksinspace.cpp
+        src/spiral.cpp
+        src/raster.cpp
+        src/textandshapes.cpp
+        src/starfield.cpp
 )
 
 # enable usb output, disable uart output

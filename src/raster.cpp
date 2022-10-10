@@ -1,9 +1,15 @@
-#include "shapes.h"
-#include "transform2d.h"
+#include "picovectorscope.h"
 
 #define DIR 0
 
-void coolDemo1(DisplayList& displayList, float dt)
+class Raster : public Demo
+{
+public:
+    void UpdateAndRender(DisplayList& displayList, float dt);
+};
+static Raster s_raster;
+
+void Raster::UpdateAndRender(DisplayList& displayList, float dt)
 {
     static float phase = 0.f;
     phase += dt;
