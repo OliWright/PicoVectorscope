@@ -3,9 +3,10 @@ cmake_minimum_required(VERSION 3.12)
 # Pull in SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(pico_vectorscope C CXX ASM)
+project(vectorscope C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
+#set(PROJECT_NAME vectorscope)
 
 if (PICO_SDK_VERSION_STRING VERSION_LESS "1.3.0")
     message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.3.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
@@ -25,45 +26,23 @@ add_compile_options(-Wall
         )
 
 
-add_executable(vectorscope)
+add_executable(${PROJECT_NAME})
 
-pico_generate_pio_header(vectorscope ${CMAKE_CURRENT_LIST_DIR}/vector.pio)
-pico_generate_pio_header(vectorscope ${CMAKE_CURRENT_LIST_DIR}/points.pio)
-pico_generate_pio_header(vectorscope ${CMAKE_CURRENT_LIST_DIR}/idle.pio)
+include(vectorscope/vectorscope.cmake)
 
-target_sources(vectorscope PRIVATE
-        buttons.cpp
-        cooldemo0.cpp
-        cooldemo1.cpp
-        cooldemo2.cpp
-        cooldemo3.cpp
-        cooldemo4.cpp
-        dacout.cpp
-        dacoutputsm.cpp
-        fixedpoint.cpp
-        displaylist.cpp
-        gameshapes.cpp
-        ledstatus.cpp
-        log.cpp
-        main.cpp
-        shapes.cpp
-        text.cpp
-        transform2d.cpp
+target_sources(${PROJECT_NAME} PRIVATE
+        src/cooldemo0.cpp
+        src/cooldemo1.cpp
+        src/cooldemo2.cpp
+        src/cooldemo3.cpp
+        src/cooldemo4.cpp
 )
 
-target_link_libraries(vectorscope PRIVATE
-        pico_stdlib
-        pico_multicore
-        hardware_pio
-        hardware_dma
-        hardware_pwm
-        )
-
 # enable usb output, disable uart output
-pico_enable_stdio_usb(vectorscope 1)
-pico_enable_stdio_uart(vectorscope 0)
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)
 
-pico_add_extra_outputs(vectorscope)
+pico_add_extra_outputs(${PROJECT_NAME})
 
 # add url via pico_set_program_url
 #example_auto_set_url(hello_pio)
