@@ -1,0 +1,61 @@
+;
+; Write data out to parallel DACs
+;
+; Takes 32-bit words in the following format
+;
+; +----------------------------------------+
+; + 31 MSB                           LSB 0 +
+; +------------+-------------+-------------+
+; + Z (8-bits) + Y (12-bits) + X (12-bits) +
+; +------------+-------------+-------------+
+; +   31-23    +    22-12    +     11-0    +
+; +------------+-------------+-------------+
+;
+; Write out the x and y values to the
+; GPIO pins, and pulses each latch while
+; the data is good.
+;
+; The Z value is used as a delay, for how long
+; the point should be held for.
+;
+; - Oli Wright 2022
+;
+
+; 12 Cycles overhead per outer loop iteration
+; 2 Cycles per shortdelay
+; 16 Cycles per long delay
+; Max short delay (127 * 2) + 12 = 254
+; Max long delay (127 * 16) + 12 = 2044
+
+.program points
+.side_set 2 ; Latch triggers for x, y
+
+.wrap_target
+start:
+    // Fetch the next 32 bit value from the TX FIFO into OSR
+    //pull block          side 3
+
+    // Shift out the X value bits to the DAC from the OSR
+    out pins, 12        side 3  [1]
+    nop                 side 2  [1]
+
+    // Shift out the Y value bits to the DAC from the OSR
+    out pins, 12        side 3  [1]
+    nop                 side 1  [1]
+
+    // Shift out the Z precision bit
+    out y, 1            side 3  [0]
+    // Shift out the Z value bits to the x register
+    out x, 7            side 3  [0]
+    // Long or short delay
+    jmp !y short_delay  side 3  [0]
+
+long_delay:
+    nop                 side 3  [7]
+    jmp x-- long_delay  side 3  [7]
+    jmp start           side 3  [0]
+
+short_delay:
+    jmp x-- short_delay side 3  [1]
+.wrap
+

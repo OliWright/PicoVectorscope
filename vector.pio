@@ -1,0 +1,52 @@
+;
+; Write data out to parallel DACs
+;
+; Takes 32-bit words in the following format
+;
+; +----------------------------------------+
+; + 31 MSB                           LSB 0 +
+; +------------+-------------+-------------+
+; + Z (8-bits) + Y (12-bits) + X (12-bits) +
+; +------------+-------------+-------------+
+; +   31-23    +    22-12    +     11-0    +
+; +------------+-------------+-------------+
+;
+; Write out the x, y and z values to the
+; GPIO pins, and pulses each latch while
+; the data is good.
+;
+; The Z value is expected to change infrequently
+; so is skipped while it stays the same
+; as an optimisation.
+;
+; - Oli Wright 2022
+;
+
+.program vector
+.side_set 3 ; Latch triggers for x, y, z
+
+.wrap_target
+public next_value:
+    // Fetch the next 32 bit value from the TX FIFO into OSR
+    //pull block          side 7
+
+    // Shift out the X value bits to the DAC from the OSR
+    out pins, 12        side 7  [1]
+    nop                 side 6  [1]
+
+    // Shift out the Y value bits to the DAC from the OSR
+    // And the Z value bits into the y register
+    out pins, 12        side 7  [0]
+    out y, 8            side 7  [0]
+    nop                 side 5  [0]
+    // Skip the DAC output of Z if it's not changed
+    jmp x!=y write_z    side 5  [0]
+.wrap
+
+public write_z:
+    // Write the Z value out to the pins and save it in
+    // the x register
+    mov pins, y         side 7  [0]
+    mov x, y            side 7  [0]
+    nop                 side 3  [0]
+    jmp next_value      side 3  [0]

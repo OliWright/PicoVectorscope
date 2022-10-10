@@ -1,0 +1,29 @@
+;
+; Cycle the vector to all four corners
+;
+; - Oli Wright 2022
+;
+
+.program idle
+.side_set 2 ; Latch triggers for x, y
+    //  X = 0
+    mov pins, NULL      side 3  [1]
+    mov pins, NULL      side 2  [1]
+.wrap_target
+    // Y = 0
+    mov pins, NULL      side 3  [7]
+    mov pins, NULL      side 1  [7]
+
+    // X = 1
+    mov pins, !NULL     side 3  [7]
+    mov pins, !NULL     side 2  [7]
+
+    // Y = 1
+    mov pins, !NULL     side 3  [7]
+    mov pins, !NULL     side 1  [7]
+
+    //  X = 0
+    mov pins, NULL      side 3  [7]
+    mov pins, NULL      side 2  [7]
+.wrap
+
