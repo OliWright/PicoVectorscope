@@ -171,7 +171,6 @@ static inline uint32_t scalarTo12bit(DisplayListIntermediate v)
 
 void DisplayList::OutputToDACs()
 {
-    DacOutput::wait();
     if(m_numDisplayListVectors > 1)
     {
         LOG_INFO("Out Vectors Start\n");

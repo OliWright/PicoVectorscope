@@ -5,15 +5,19 @@
 #include "pico/sync.h"
 
 const DacOutputPioSmConfig* DacOutput::s_currentPioConfig = nullptr;
+const DacOutputPioSmConfig* DacOutput::s_previousPioConfig = nullptr;
 DacOutput::DmaChannel DacOutput::s_dmaChannels[kNumBuffers];
 uint32_t DacOutput::s_buffers[kNumBuffers][kNumEntriesPerBuffer];
 uint32_t DacOutput::s_currentBufferIdx = 0;
 uint32_t DacOutput::s_currentEntryIdx = 0;
-bool DacOutput::s_previousFrameRunning = false;
-const DacOutputPioSmConfig* DacOutput::s_pendingDacOutputPioSmConfigChange = nullptr;
 const DacOutputPioSmConfig* DacOutput::s_idlePioSmConfig = nullptr;
 uint32_t DacOutput::s_nextBufferIrq = 0;
-uint32_t DacOutput::s_numDmaChannelsRunning = 0;
+volatile uint32_t DacOutput::s_numDmaChannelsQueued = 0;
+uint64_t DacOutput::s_frameStartUs = 0;
+uint64_t DacOutput::s_frameDurationUs = 0;
+
+
+static const DacOutputPioSmConfig* s_activePioSmConfig = nullptr;
 
 static critical_section_t s_dmaCriticalSection = {};
 
@@ -69,32 +73,9 @@ void DacOutput::DmaChannel::Init(uint32_t* pBufferBase, int chainToDmaChannelIdx
 
 void DacOutput::Flush(bool finalFlushForFrame)
 {
-    if(s_previousFrameRunning)
-    {
-        LOG_INFO("Wait IRQ\n");
-        wait();
-    }
-    if(s_pendingDacOutputPioSmConfigChange)
-    {
-        const DacOutputPioSmConfig& config = *s_pendingDacOutputPioSmConfigChange;
-        s_pendingDacOutputPioSmConfigChange = nullptr;
-
-        // Wait for all the DMA to complete
-        wait();
-
-        activatePioSm(config);
-
-        // Reconfigure the DMA channels to write to the new PIO SM
-        io_wo_32* pioTxFifo = &(config.m_pio->txf[config.m_stateMachine]);
-        uint32_t dreq = pio_get_dreq(config.m_pio, config.m_stateMachine, true);
-        for (uint32_t i = 0; i < kNumBuffers; ++i)
-        {
-            s_dmaChannels[i].ConfigurePioSm(pioTxFifo, dreq);
-        }
-    }
-
     if (s_currentEntryIdx == 0)
     {
+        // Nothing to flush
         return;
     }
 
@@ -106,49 +87,36 @@ void DacOutput::Flush(bool finalFlushForFrame)
     {
         // Tell the DMA to raise IRQ line 0 when the channel finishes a block
         dmaChannel.m_isFinal = true;
-        s_previousFrameRunning = true;
     }
 
-    
+    // Configure the DMA channel for the current PIO program
+    const DacOutputPioSmConfig& pioConfig = *s_currentPioConfig;
+    io_wo_32* pioTxFifo = &(pioConfig.m_pio->txf[pioConfig.m_stateMachine]);
+    uint32_t dreq = pio_get_dreq(pioConfig.m_pio, pioConfig.m_stateMachine, true);
+    dmaChannel.ConfigurePioSm(pioTxFifo, dreq);
+    dmaChannel.m_pDacOutputPioSmConfigToSet = nullptr;
 
     critical_section_enter_blocking(&s_dmaCriticalSection);
         dmaChannel.Enable(s_currentEntryIdx);
-        // Enable chaining on the previous DMA channel so that if it's still running,
-        // it will chain to this one automatically
-        s_dmaChannels[(s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers].EnableChaining();
-
-        if(++s_numDmaChannelsRunning == 1)
+        if(s_currentPioConfig == s_previousPioConfig)
         {
-            //dmaChannel.Start();
+            // Enable chaining on the previous DMA channel so that if it's still running,
+            // it will chain to this one automatically
+            s_dmaChannels[(s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers].EnableChaining();
+        }
+        else
+        {
+            // We can't chain it, because it requires a change in PIO SM program
+            dmaChannel.m_pDacOutputPioSmConfigToSet = s_currentPioConfig;
+            s_previousPioConfig = s_currentPioConfig;
+        }
+
+        if(++s_numDmaChannelsQueued == 1)
+        {
+            configureAndStartDma(*s_currentPioConfig, dmaChannel);
         }
     critical_section_exit(&s_dmaCriticalSection);
 
-#if 1
-    // If any of the other DMA channels are currently running, then this channel
-    // will automatically be chained when they're done
-    bool dmaIsRunning = false;
-    for (uint32_t i = 1; i < kNumBuffers; ++i)
-    {
-        if (s_dmaChannels[(s_currentBufferIdx + i) % kNumBuffers].IsBusy())
-        {
-            dmaIsRunning = true;
-            break;
-        }
-    }
-    if (!dmaIsRunning)
-    {
-        // Uh-oh, none of the other channels are doing anything.
-        // But maybe it just kicked off our new channel while we were thinking about it?
-        if (!dmaChannel.IsBusy())
-        {
-            // Nope.
-            // We're late filling in the buffer and the DMA is starved.
-            // Best kick it off now.
-            LOG_INFO(" -START- ");
-            dmaChannel.Start();
-        }
-    }
-#endif
     LOG_INFO("] ");
     // Move on to the next buffer
     if (++s_currentBufferIdx == kNumBuffers)
@@ -158,7 +126,6 @@ void DacOutput::Flush(bool finalFlushForFrame)
     s_currentEntryIdx = 0;
     // Wait for the DMA to complete on our new buffer.
     DmaChannel& nextDmaChannel = s_dmaChannels[s_currentBufferIdx];
-    //nextDmaChannel.DisableChaining();
     LOG_INFO(" Wait [%d", s_currentBufferIdx);
     nextDmaChannel.Wait();
     LOG_INFO("]\n");
@@ -181,12 +148,7 @@ bool DacOutput::isDmaRunning()
 void DacOutput::wait()
 {
     LOG_INFO("Big wait: [");
-    while(isDmaRunning())
-    {
-        tight_loop_contents();
-    }
-    LOG_INFO("]-[");
-    while(s_previousFrameRunning)
+    while(s_numDmaChannelsQueued > 0)
     {
         tight_loop_contents();
     }
@@ -195,75 +157,84 @@ void DacOutput::wait()
 
 void DacOutput::dmaIrqHandler()
 {
+    critical_section_enter_blocking(&s_dmaCriticalSection);
     DmaChannel& dmaChannel = s_dmaChannels[s_nextBufferIrq];
+    bool makeIdle = false;
     if(dmaChannel.m_isFinal)
     {
-        // Activate the idle SM
-        activatePioSm(*s_idlePioSmConfig);
-        s_previousFrameRunning = false;
         dmaChannel.m_isFinal = false;
+        s_frameDurationUs = time_us_64() - s_frameStartUs;
+        s_frameStartUs = 0;
+        makeIdle = true;
     }
     dmaChannel.m_complete = true;
 
     s_nextBufferIrq = (s_nextBufferIrq + 1) % kNumBuffers;
     dma_channel_acknowledge_irq0(dmaChannel.m_channelIdx);
 
-    critical_section_enter_blocking(&s_dmaCriticalSection);
-        bool lookAtNextChannel = (--s_numDmaChannelsRunning > 0);
-    critical_section_exit(&s_dmaCriticalSection);
-    if(lookAtNextChannel)
+    if((--s_numDmaChannelsQueued > 0))
     {
-        // There are more buffers queued
+        // There are more buffers queued.
+        // But chaining would have been used unless a change in PIO SM program
+        // is required.
         DmaChannel& nextDmaChannel = s_dmaChannels[s_nextBufferIrq];
         if(nextDmaChannel.m_pDacOutputPioSmConfigToSet != nullptr)
         {
             // We need to configure the PIO, and kick off
             // this DMA channel right here.
+            configureAndStartDma(*nextDmaChannel.m_pDacOutputPioSmConfigToSet, nextDmaChannel);
+            makeIdle = false;
         }
     }
+
+    if(makeIdle)
+    {
+        // Activate the idle SM
+        setActivePioSm(*s_idlePioSmConfig);
+    }
+    critical_section_exit(&s_dmaCriticalSection);
 }
 
-void DacOutput::activatePioSm(const DacOutputPioSmConfig& config)
+void DacOutput::setActivePioSm(const DacOutputPioSmConfig& config)
 {
-    LOG_INFO("Switch SM: %d\n", config.m_stateMachine);
-    if(s_currentPioConfig != nullptr)
+    if(s_activePioSmConfig != &config)
     {
-        // Wait for the current PIO SM to drain its FIFO
-        while(!pio_sm_is_tx_fifo_empty(s_currentPioConfig->m_pio, s_currentPioConfig->m_stateMachine))
+        LOG_INFO("Switch SM: %d\n", config.m_stateMachine);
+        if(s_activePioSmConfig != nullptr)
         {
-            tight_loop_contents();
+            // Wait for the current PIO SM to drain its FIFO
+            while(!pio_sm_is_tx_fifo_empty(s_activePioSmConfig->m_pio, s_activePioSmConfig->m_stateMachine))
+            {
+                tight_loop_contents();
+            }
+            // Turn off the current PIO SM
+            s_activePioSmConfig->SetEnabled(false);
         }
-        // Turn off the current PIO SM
-        s_currentPioConfig->SetEnabled(false);
-    }
 
-    // Turn on the new PIO SM
-    config.SetEnabled(true);
-    s_currentPioConfig = &config;
-    LOG_INFO("Done Switch SM: %d\n", config.m_stateMachine);
+        // Turn on the new PIO SM
+        config.SetEnabled(true);
+        s_activePioSmConfig = &config;
+        LOG_INFO("Done Switch SM: %d\n", config.m_stateMachine);
+    }
 }
 
-void DacOutput::configureAndStartDma(DmaChannel& dmaChannel)
+void DacOutput::configureAndStartDma(const DacOutputPioSmConfig& pioConfig, DmaChannel& dmaChannel)
 {
-    if(dmaChannel.m_pDacOutputPioSmConfigToSet != nullptr)
+    if(s_frameStartUs == 0)
     {
-        activatePioSm(*dmaChannel.m_pDacOutputPioSmConfigToSet);
+        s_frameStartUs = time_us_64();
     }
+    setActivePioSm(pioConfig);
     dmaChannel.Start();
 }
 
 void DacOutput::SetCurrentPioSm(const DacOutputPioSmConfig& config)
 {
-    if(s_pendingDacOutputPioSmConfigChange != nullptr)
-    {
-        // We already have a change pending, so flush that first
-        Flush();
-    }
     if(s_currentPioConfig == &config)
     {
         // No change.  Don't do anything
         return;
     }
     Flush();
-    s_pendingDacOutputPioSmConfigChange = &config;
+    s_currentPioConfig = &config;
 }

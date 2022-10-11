@@ -15,9 +15,9 @@ public:
 private:
     enum class SmID
     {
+        eIdle,
         eVector,
         ePoints,
-        eIdle,
 
         eCount
     };

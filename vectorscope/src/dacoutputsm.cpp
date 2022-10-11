@@ -1,5 +1,5 @@
 #include "dacoutputsm.h"
-#define LOG_ENABLED 0
+//#define LOG_ENABLED 0
 #include "log.h"
 
 #include "vector.pio.h"
@@ -18,10 +18,13 @@ struct ProgramInfo
     uint16_t m_clockDivider;
 };
 static const ProgramInfo s_programInfo[] = {
+    {&idle_program,   idle_wrap_target,   idle_wrap,   pio0, 2, 32},
     {&vector_program, vector_wrap_target, vector_wrap, pio0, 3, 2},
     {&points_program, points_wrap_target, points_wrap, pio0, 2, 32},
-    {&idle_program,   idle_wrap_target,   idle_wrap,   pio0, 2, 32},
 };
+
+static uint s_overloadedStateMachine;
+static uint s_overloadedProgramOffset = 0;
 
 void DacOutputSm::configureSm(SmID smID)
 {
@@ -29,22 +32,34 @@ void DacOutputSm::configureSm(SmID smID)
     DacOutputPioSmConfig& outConfig = s_configs[(int)smID];
 
     outConfig.m_pio = programInfo.m_pio;
+    outConfig.m_pProgram = programInfo.m_pProgram;
 
-    // Find a free state machine on our chosen PIO (erroring if there are
-    // none). Configure it to run our program, and start it, using the
-    // helper function we included in our .s_pio file.
-    outConfig.m_stateMachine = pio_claim_unused_sm(outConfig.m_pio, true);
+    if(smID == SmID::eIdle)
+    {
+        // Find a free state machine on our chosen PIO (erroring if there are
+        // none). Configure it to run our program, and start it, using the
+        // helper function we included in our .s_pio file.
+        outConfig.m_stateMachine = pio_claim_unused_sm(outConfig.m_pio, true);
+
+        // We're going to load the idle program at the top of PIO instruction memory
+        outConfig.m_programOffset = PIO_INSTRUCTION_COUNT - programInfo.m_pProgram->length;
+        pio_add_program_at_offset(outConfig.m_pio, outConfig.m_pProgram, outConfig.m_programOffset);
+        outConfig.m_overloaded = false;
+    }
+    else
+    {
+        // All other programs will be loaded on demand, at the beginning of PIO instruction memory
+        outConfig.m_stateMachine = s_overloadedStateMachine;
+        outConfig.m_programOffset = s_overloadedProgramOffset;
+        outConfig.m_overloaded = true;
+        assert(pio_can_add_program_at_offset(outConfig.m_pio, outConfig.m_pProgram, outConfig.m_programOffset));
+    }
 
 
     // Set the pin direction to output at the PIO
     pio_sm_set_consecutive_pindirs(outConfig.m_pio, outConfig.m_stateMachine, kDacOutBaseDacPin, kNumDacOutDacPins, true);
     pio_sm_set_consecutive_pindirs(outConfig.m_pio, outConfig.m_stateMachine, kDacOutBaseLatchPin, programInfo.m_numSidesetPins, true);
 
-    // Our assembled program needs to be loaded into this PIO's instruction
-    // memory. This SDK function will find a location (offset) in the
-    // instruction memory where there is enough space for our program. We need
-    // to remember this location!
-    outConfig.m_programOffset = pio_add_program(outConfig.m_pio, programInfo.m_pProgram);
 
     // Configure the state machine
     outConfig.m_config = pio_get_default_sm_config();
@@ -63,8 +78,11 @@ void DacOutputSm::configureSm(SmID smID)
     // The OSR register shifts to the right, disable auto-pull
     sm_config_set_out_shift(&outConfig.m_config, true, true, 0);
 
-    // Load our configuration, and jump to the start of the program
-    pio_sm_init(outConfig.m_pio, outConfig.m_stateMachine, outConfig.m_programOffset, &outConfig.m_config);
+    if(!outConfig.m_overloaded)
+    {
+        // Load our configuration, and jump to the start of the program
+        pio_sm_init(outConfig.m_pio, outConfig.m_stateMachine, outConfig.m_programOffset, &outConfig.m_config);
+    }
 }
 
 void DacOutputSm::Init()
@@ -81,6 +99,8 @@ void DacOutputSm::Init()
         //pio_gpio_init(pio1, kDacOutBaseLatchPin + i);
     }
 
+    s_overloadedStateMachine = pio_claim_unused_sm(pio0, true);
+
     for(uint32_t i = 0; i < (uint32_t) SmID::eCount; ++i)
     {
         configureSm((SmID)i);
@@ -92,8 +112,20 @@ void DacOutputPioSmConfig::SetEnabled(bool enabled) const
     // Switch it on or off
     if(enabled)
     {
-        pio_sm_restart(m_pio, m_stateMachine);
-        pio_sm_exec(m_pio, m_stateMachine, pio_encode_jmp(m_programOffset));
+        if(m_overloaded)
+        {
+            // Upload the new program
+            pio_add_program_at_offset(m_pio, m_pProgram, m_programOffset);
+        }
+        pio_sm_init(m_pio, m_stateMachine, m_programOffset, &m_config);
+        pio_sm_set_enabled(m_pio, m_stateMachine, true);
     }
-    pio_sm_set_enabled(m_pio, m_stateMachine, enabled);
+    else
+    {
+        pio_sm_set_enabled(m_pio, m_stateMachine, false);
+        if(m_overloaded)
+        {
+            pio_remove_program(m_pio, m_pProgram, m_programOffset);
+        }
+    }
 }

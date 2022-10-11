@@ -1,4 +1,4 @@
-#define LOG_ENABLED 0
+//#define LOG_ENABLED 0
 #include "log.h"
 #include "dacout.h"
 #include "dacoutputsm.h"
@@ -65,13 +65,9 @@ void checkButton()
 {
     if((Buttons::HoldTimeMs(Buttons::Id::Left) > 500) && (Buttons::HoldTimeMs(Buttons::Id::Right) > 500) && Buttons::IsJustPressed(Buttons::Id::Fire))
     {
-        if(coolDemoIdx == s_numDemos)
+        if(++coolDemoIdx == s_numDemos)
         {
             coolDemoIdx = 0;
-        }
-        else
-        {
-            ++coolDemoIdx;
         }
     }
 }
@@ -85,7 +81,6 @@ void dacOutputLoop()
     if (frameDuration < kNumMicrosBetweenFrames)
     {
         LOG_INFO("%d\n", (int32_t) frameDuration);
-        LedStatus::SetStep(4, LedStatus::Brightness((float)frameDuration * (1.f / kNumMicrosBetweenFrames)), 400);
         sleep_us(kNumMicrosBetweenFrames - frameDuration);
         /*next*/ frameStart += kNumMicrosBetweenFrames;
         LOG_INFO("-\n");
@@ -106,7 +101,11 @@ void dacOutputLoop()
     // Write the entire display list out to the DACs
     outputDisplayListIdx = nextDisplayListIdx;
     LOG_INFO("Output [%d", outputDisplayListIdx);
+    LedStatus::SetStep(6, LedStatus::Brightness((float)DacOutput::GetFrameDurationUs() * (1.f / kNumMicrosBetweenFrames)), 400);
+    DacOutput::wait(); //< This shouldn't be required. TODO: Fix.
+    uint64_t dacOutStart = time_us_64();
     pDisplayList[outputDisplayListIdx]->OutputToDACs();
+    LedStatus::SetStep(4, LedStatus::Brightness((float)(time_us_64() - dacOutStart) * (1.f / kNumMicrosBetweenFrames)), 400);
     LOG_INFO("]\n");
 }
 
@@ -165,7 +164,8 @@ int main()
     LedStatus::SetStep(0, LedStatus::Brightness(1.f), 400);
     LedStatus::SetStep(1, LedStatus::Brightness(0.f), 100);
     LedStatus::SetStep(3, LedStatus::Brightness(0.f), 100);
-    LedStatus::SetStep(5, LedStatus::Brightness(0.f), 500);
+    LedStatus::SetStep(5, LedStatus::Brightness(0.f), 100);
+    LedStatus::SetStep(7, LedStatus::Brightness(0.f), 500);
 
     Buttons::Init();
 

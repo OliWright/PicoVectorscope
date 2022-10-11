@@ -27,7 +27,7 @@ public:
     }
     static void Flush(bool finalFlushForFrame = false);
     static void SetCurrentPioSm(const DacOutputPioSmConfig& config);
-    static void wait();
+    static uint64_t GetFrameDurationUs() {return s_frameDurationUs;}
 
 private:
     constexpr static uint32_t kNumBuffers = 3;
@@ -87,23 +87,26 @@ private:
         }
     };
 
+public:
+    static void wait();
 private:
     static bool isDmaRunning();
     static void dmaIrqHandler();
-    static void activatePioSm(const DacOutputPioSmConfig& config);
-    static void configureAndStartDma(DmaChannel& dmaChannel);
+    static void setActivePioSm(const DacOutputPioSmConfig& config);
+    static void configureAndStartDma(const DacOutputPioSmConfig& pioConfig, DmaChannel& dmaChannel);
 
 private:
     static const DacOutputPioSmConfig* s_currentPioConfig;
+    static const DacOutputPioSmConfig* s_previousPioConfig;
     static DmaChannel   s_dmaChannels[kNumBuffers];
     static uint32_t     s_buffers[kNumBuffers][kNumEntriesPerBuffer];
     static uint32_t     s_currentBufferIdx;
     static uint32_t     s_currentEntryIdx;
-    static bool         s_previousFrameRunning;
-    static const DacOutputPioSmConfig* s_pendingDacOutputPioSmConfigChange;
     static const DacOutputPioSmConfig* s_idlePioSmConfig;
     static uint32_t     s_nextBufferIrq;
-    static uint32_t     s_numDmaChannelsRunning;
+    static volatile uint32_t s_numDmaChannelsQueued;
+    static uint64_t     s_frameStartUs;
+    static uint64_t     s_frameDurationUs;
 };
 
 #endif
