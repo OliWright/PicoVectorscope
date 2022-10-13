@@ -41,7 +41,7 @@ private:
         const DacOutputPioSmConfig* m_pDacOutputPioSmConfigToSet;
         dma_channel_config m_configWithChain;
         dma_channel_config m_configWithoutChain;
-        bool m_complete;
+        volatile bool m_complete;
         bool m_isFinal;
 
         void Init(uint32_t* pBufferBase, int chainToDmaChannelIdx);

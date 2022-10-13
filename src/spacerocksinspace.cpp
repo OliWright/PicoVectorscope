@@ -736,6 +736,8 @@ public:
 };
 static SpaceRocksInSpace s_spaceRocksInSpace;
 
+constexpr BurnLength test = Mul(BurnLength(20.f), BurnLength(10.f));
+
 void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
 {
     GameState::Update(GameState::Duration(dt));
@@ -756,7 +758,8 @@ void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
     {
         FloatTransform2D transform;
         CalcTextTransform(DisplayListVector2(0.5f, 0.7f), 0.08f, transform);
-        BurnLength burnLength = BurnLength(GameState::s_timeInCurrentState) * BurnLength(20.f);
+        //BurnLength burnLength = Mul(BurnLength(GameState::s_timeInCurrentState), BurnLength(20.f));
+        BurnLength burnLength = Mul(BurnLength(20.f), GameState::s_timeInCurrentState, 0, 4);
         TextPrint(displayList, transform, message, Intensity(1.f), burnLength, true);
     }
 

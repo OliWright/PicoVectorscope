@@ -1,4 +1,3 @@
-//#define LOG_ENABLED 0
 #include "log.h"
 #include "dacout.h"
 #include "dacoutputsm.h"
@@ -25,6 +24,8 @@ static constexpr uint64_t kNumMicrosBetweenFrames = 16667; // 60FPS
 //static constexpr uint64_t kNumMicrosBetweenFrames = 10000; // 100FPS
 static constexpr uint32_t kGeneralPurposeButtonPin = 20;
 static uint32_t coolDemoIdx = 0;
+
+static LogChannel FrameSynchronisation(false);
 
 static inline uint32_t floatToOut(const float v)
 {
@@ -74,49 +75,50 @@ void checkButton()
 
 void dacOutputLoop()
 {
+#if 1
     // Measure the duration of the previous frame, to determine if we need to sleep
     static uint64_t frameStart = 0;
     uint64_t frameEnd = time_us_64();
     uint64_t frameDuration = frameEnd - frameStart;
     if (frameDuration < kNumMicrosBetweenFrames)
     {
-        LOG_INFO("%d\n", (int32_t) frameDuration);
         sleep_us(kNumMicrosBetweenFrames - frameDuration);
         /*next*/ frameStart += kNumMicrosBetweenFrames;
-        LOG_INFO("-\n");
     }
     else
     {
-        LOG_INFO("X\n");
         /*next*/ frameStart = frameEnd;
     }
+#endif    
     checkButton();
 
     // Lock the mutex for the next frame's DisplayList
     uint32_t nextDisplayListIdx = 1 - outputDisplayListIdx;
+    LOG_INFO(FrameSynchronisation, "DO W: %d\n", nextDisplayListIdx);
     mutex_enter_blocking(displayListMutex + nextDisplayListIdx);
     // Only then do we release this frame's DisplayList
     mutex_exit(displayListMutex + outputDisplayListIdx);
-
-    // Write the entire display list out to the DACs
     outputDisplayListIdx = nextDisplayListIdx;
-    LOG_INFO("Output [%d", outputDisplayListIdx);
+
+    // Write the entire display list out to the DACsFIFO buffers
+    LOG_INFO(FrameSynchronisation, "DO S %d\n", outputDisplayListIdx);
     LedStatus::SetStep(6, LedStatus::Brightness((float)DacOutput::GetFrameDurationUs() * (1.f / kNumMicrosBetweenFrames)), 400);
-    DacOutput::wait(); //< This shouldn't be required. TODO: Fix.
     uint64_t dacOutStart = time_us_64();
     pDisplayList[outputDisplayListIdx]->OutputToDACs();
     LedStatus::SetStep(4, LedStatus::Brightness((float)(time_us_64() - dacOutStart) * (1.f / kNumMicrosBetweenFrames)), 400);
-    LOG_INFO("]\n");
+    LOG_INFO(FrameSynchronisation, "DO E %d\n", outputDisplayListIdx);
 }
 
 void displayListUpdateLoop()
 {
     // Lock the next DisplayList for us to populate with a cool demo frame
+    LOG_INFO(FrameSynchronisation, "Fill W: %d\n", displayListIdx);
     mutex_enter_blocking(displayListMutex + displayListIdx);
+    LOG_INFO(FrameSynchronisation, "Fill S: %d\n", displayListIdx);
+
     uint64_t frameStart = time_us_64();
 
     // Fill in the DisplayList
-    LOG_INFO("DLS: %d\n", displayListIdx);
     DisplayList& displayList = *(pDisplayList[displayListIdx]);
     displayList.Clear();
 
@@ -125,7 +127,7 @@ void displayListUpdateLoop()
     s_demos[coolDemoIdx]->UpdateAndRender(displayList, 0.0167f);
 
     // Unlock it so that the display output knows it's ready
-    LOG_INFO("DLE: %d\n", displayListIdx);
+    LOG_INFO(FrameSynchronisation, "Fill E: %d\n", displayListIdx);
     mutex_exit(displayListMutex + displayListIdx);
     displayListIdx = 1 - displayListIdx;
 
@@ -169,7 +171,6 @@ int main()
 
     Buttons::Init();
 
-    LOG_INFO("Hello, world!\n");
     TestFixedPoint();
 
     DacOutputSm::Init();

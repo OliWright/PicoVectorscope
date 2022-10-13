@@ -1,4 +1,3 @@
-#define LOG_ENABLED 0
 #include "log.h"
 
 #include "displaylist.h"
@@ -11,12 +10,13 @@
 #include <math.h>
 #include <stdio.h>
 
-
 #define SPEED_CONSTANT 2048
 
 #if !STEP_DIV_IN_DISPLAY_LIST
 static_assert(sizeof(DisplayListVector) == 6, "");
 #endif
+
+static LogChannel DisplayListSynchronisation(false);
 
 DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
     : m_pDisplayListVectors((DisplayListVector*)malloc(maxNumItems * sizeof(DisplayListVector))),
@@ -149,7 +149,7 @@ void DisplayList::terminatePoints()
 
 void DisplayList::DebugDump() const
 {
-#if LOG_ENABLED
+#if 0//LOG_ENABLED
     for (uint32_t i = 0; i < m_numDisplayListVectors; ++i)
     {
         const DisplayListVector& vector = m_pDisplayListVectors[i];
@@ -171,9 +171,9 @@ static inline uint32_t scalarTo12bit(DisplayListIntermediate v)
 
 void DisplayList::OutputToDACs()
 {
+    LOG_INFO(DisplayListSynchronisation, "DL: %d, %d\n", m_numDisplayListVectors, m_numDisplayListPoints);
     if(m_numDisplayListVectors > 1)
     {
-        LOG_INFO("Out Vectors Start\n");
         terminateVectors();
         DisplayListVector* pItem = m_pDisplayListVectors;
         DisplayListVector* pEnd = pItem + m_numDisplayListVectors;
@@ -190,9 +190,9 @@ void DisplayList::OutputToDACs()
             DisplayListIntermediate dx = DisplayListIntermediate(vector.x - x) / (int) vector.numSteps;
             DisplayListIntermediate dy = DisplayListIntermediate(vector.y - y) / (int) vector.numSteps;
 #endif
-            LOG_INFO("{%d",vector.numSteps);
+            //LOG_INFO("{%d",vector.numSteps);
             uint32_t* pOutput = DacOutput::AllocateBufferSpace(vector.numSteps);
-            LOG_INFO("}");
+            //LOG_INFO("}");
             const uint32_t* pOutputEnd = pOutput + vector.numSteps;
             for (; pOutput != pOutputEnd; ++pOutput)
             {
@@ -207,12 +207,12 @@ void DisplayList::OutputToDACs()
             x = vector.x;
             y = vector.y;
         }
-        LOG_INFO("Out Vectors End\n");
+        //LOG_INFO("Out Vectors End\n");
     }
 #if 1
     if(m_numDisplayListPoints > 0)
     {
-        LOG_INFO("Out Points Start\n");
+        //LOG_INFO("Out Points Start\n");
         terminatePoints();
         terminatePoints();
         DacOutput::SetCurrentPioSm(DacOutputSm::Points());
@@ -256,7 +256,7 @@ void DisplayList::OutputToDACs()
                 *pOutput = bits;
             }
         }
-        LOG_INFO("Out Points End\n");
+        //LOG_INFO("Out Points End\n");
     }
 #endif
     DacOutput::Flush(true);

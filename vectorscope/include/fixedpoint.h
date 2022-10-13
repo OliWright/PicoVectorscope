@@ -10,6 +10,8 @@ class MathsIntermediateFixedPoint
 {
 public:
     typedef TStorageType StorageType;
+    typedef MathsIntermediateFixedPoint<numFractionalBits, TStorageType> MathsIntermediateType;
+    typedef TStorageType MathsIntermediateStorageType;
 
     static constexpr unsigned int kNumFractionalBits = numFractionalBits;
     static constexpr unsigned int kNumWholeBits = (sizeof(StorageType) * 8) - kNumFractionalBits;
@@ -385,6 +387,30 @@ private:
 
     StorageType m_storage;
 };
+
+// Free-function multiply, that can multiply two different fixed-point numbers
+// and also gives you the option to pre-shift (right) either or both arguments
+// in order to prevent overflow.
+template<typename TA, typename TB>
+constexpr static inline typename TA::MathsIntermediateType Mul(TA a, TB b, int32_t preShiftBitsA = 0, int32_t preShiftBitsB = 0)
+{
+    typename TA::MathsIntermediateStorageType sa = ((typename TA::MathsIntermediateStorageType) a.getStorage()) >> preShiftBitsA;
+    typename TA::MathsIntermediateStorageType sb = ((typename TA::MathsIntermediateStorageType) b.getStorage()) >> preShiftBitsB;
+    int32_t postShiftBits = (int32_t)TB::kNumFractionalBits - preShiftBitsA - preShiftBitsB;
+    return typename TA::MathsIntermediateType((sa * sb) >> postShiftBits);
+}
+
+// Free-function divide, that can divide two different fixed-point numbers
+// and also gives you the option to post-shift (left) in order to reduce the
+// pre-shift in order to prevent overflow.
+template<typename TA, typename TB>
+constexpr static inline typename TA::MathsIntermediateType Div(TA a, TB b, int32_t preShiftBitsA = (int32_t)TB::kNumFractionalBits, int32_t preShiftBitsB = 0 )
+{
+    typename TA::MathsIntermediateStorageType sa = ((typename TA::MathsIntermediateStorageType) a.getStorage()) << preShiftBitsA;
+    typename TA::MathsIntermediateStorageType sb = ((typename TA::MathsIntermediateStorageType) b.getStorage()) >> preShiftBitsB;
+    int32_t postShiftBits = (int32_t)TB::kNumFractionalBits - preShiftBitsA - preShiftBitsB;
+    return typename TA::MathsIntermediateType((uint32_t)(sa / sb) << postShiftBits);
+}
 
 void TestFixedPoint();
 

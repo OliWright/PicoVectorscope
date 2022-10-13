@@ -1,8 +1,9 @@
 #include "fixedpoint.h"
-
 #include "log.h"
 
 #include <stdio.h>
+
+static LogChannel FixedPointTesting(true);
 
 static uint32_t s_randSeed = 123456789;
 uint32_t SimpleRand()
@@ -15,60 +16,72 @@ uint32_t SimpleRand()
 
 typedef FixedPoint<14, int16_t, int32_t, true /*doClamping*/> FixedPoint_S2_14;
 typedef FixedPoint<26, int32_t, int32_t, false> FixedPoint_S6_26;
+typedef FixedPoint<18, int32_t, int32_t, false> FixedPoint_S14_18;
 
 void TestFixedPoint()
 {
+#if LOG_ENABLED
     FixedPoint_S2_14 a;
     a = 0.25f;
-    LOG_INFO("a = %f (0.25)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (0.25)\n", (float)a);
 
     a = 1.1f;
     a = a + FixedPoint_S2_14(3.f);
-    LOG_INFO("a = %f (1.99999)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (1.99999)\n", (float)a);
 
     a = 1.4f;
     a *= FixedPoint_S2_14(0.5f);
-    LOG_INFO("a = %f (0.7)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (0.7)\n", (float)a);
 
     a = 1.4f;
     a = (a * FixedPoint_S2_14(0.5f));
-    LOG_INFO("a = %f (0.7)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (0.7)\n", (float)a);
 
     a = 0.9f;
     a /= FixedPoint_S2_14(1.5f);
-    LOG_INFO("a = %f (0.6)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (0.6)\n", (float)a);
 
     a = 0.15f;
     a = a * 2;
-    LOG_INFO("a = %f (0.3)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (0.3)\n", (float)a);
 
     a = 0.15f;
     a = a * (uint16_t)2;
-    LOG_INFO("a = %f (0.3)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (0.3)\n", (float)a);
 
     a = FixedPoint_S2_14(1.f).sqrt();
-    LOG_INFO("a = %f (1.0)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (1.0)\n", (float)a);
 
     a = FixedPoint_S2_14(2.f).sqrt();
-    LOG_INFO("a = %f (1.4142)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (1.4142)\n", (float)a);
 
     a = FixedPoint_S2_14(0.5f).sqrt();
-    LOG_INFO("a = %f (0.7071)\n", (float)a);
+    LOG_INFO(FixedPointTesting, "a = %f (0.7071)\n", (float)a);
 
     int32_t s = 0x10000;
     s = FixedPointSqrt(s, 16);
-    LOG_INFO("a = 0x%08x (0x00010000)\n", s);
+    LOG_INFO(FixedPointTesting, "a = 0x%08x (0x00010000)\n", s);
 
     s = 0x4000;
     s = FixedPointSqrt(s, 14);
-    LOG_INFO("a = 0x%08x (0x00004000)\n", s);
+    LOG_INFO(FixedPointTesting, "a = 0x%08x (0x00004000)\n", s);
 
     FixedPoint_S6_26 b = FixedPoint_S6_26(FixedPoint_S2_14(0.3f) - FixedPoint_S2_14(0.1f));
-    LOG_INFO("b = %f (0.2)\n", (float)b);
+    LOG_INFO(FixedPointTesting, "b = %f (0.2)\n", (float)b);
 
     b = FixedPoint_S6_26(FixedPoint_S2_14(1.f) / FixedPoint_S2_14(0.125f));
-    LOG_INFO("b = %f (8)\n", (float)b);
-   
+    LOG_INFO(FixedPointTesting, "b = %f (8)\n", (float)b);
+
+    b = Div(FixedPoint_S6_26(1.f), FixedPoint_S6_26(8.f), 0, 0);
+    LOG_INFO(FixedPointTesting, "b = %f (0.125)\n", (float)b);
+
+    b = Div(FixedPoint_S6_26(1.f), FixedPoint_S6_26(8.f), 4, 1);
+    LOG_INFO(FixedPointTesting, "b = %f (0.125)\n", (float)b);
+
+    FixedPoint_S14_18 c = Div(FixedPoint_S14_18(1.f), FixedPoint_S14_18(8.f), 11, 4);
+    LOG_INFO(FixedPointTesting, "c = %f (0.125)\n", (float)c);
+
+#endif  
 }
 
 

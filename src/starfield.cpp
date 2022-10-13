@@ -6,11 +6,12 @@ struct StarCoord
 {
     StarCoordScalar x, y, z;
 };
-typedef FixedPoint<13, int32_t, int32_t, false> StarCoordIntermediate;
+typedef FixedPoint<18, int32_t, int32_t, false> StarCoordIntermediate;
 static StarCoord s_stars[kNumStars];
 
-//static constexpr StarCoordScalar kStarSpeed(3.f);
+//static constexpr StarCoordScalar kStarSpeed(0.1f);
 static constexpr StarCoordScalar kStarSpeed(2.f);
+static LogChannel StarDetails(false);
 
 class Starfield : public Demo
 {
@@ -33,12 +34,12 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
             star.y = StarCoordScalar::randFullRange();
             star.z = StarCoordScalar((StarCoordScalar::StorageType) (((StarCoordScalar::StorageType) SimpleRand()) & 0x7fff));
 
-            LOG_INFO("x: %f, y: %f, z; %f\n", (float) star.x, (float) star.y, (float) star.z);
+            LOG_INFO(StarDetails, "x: %f, y: %f, z; %f\n", (float) star.x, (float) star.y, (float) star.z);
         }
     }
 
     DisplayListPoint star2D = {0.f, 0.f, 0.2f};
-    LOG_INFO("Stars update\n");
+    LOG_INFO(StarDetails, "Stars update\n");
     constexpr StarCoordIntermediate proj = StarCoordIntermediate(0.25f);
     constexpr StarCoordIntermediate zOffset = StarCoordIntermediate(32.f);
     constexpr StarCoordIntermediate farZ = StarCoordScalar((StarCoordScalar::StorageType) 0x7fff);
@@ -54,26 +55,23 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
         StarCoordIntermediate x = (StarCoordScalar::MathsIntermediateType)star.x;
         StarCoordIntermediate y = (StarCoordScalar::MathsIntermediateType)star.y;
         StarCoordIntermediate z = (StarCoordScalar::MathsIntermediateType)star.z;
-        LOG_INFO("x: %f, y: %f, z; %f\n", (float) x, (float) y, (float) z);
+        LOG_INFO(StarDetails, "x: %f, y: %f, z; %f\n", (float) x, (float) y, (float) z);
 
-        StarCoordIntermediate recipZ = StarCoordIntermediate(1.f) / (z + zOffset);
-        StarCoordIntermediate screenX = (proj * x * recipZ) + StarCoordIntermediate(0.5f);
+        //StarCoordIntermediate recipZ = StarCoordIntermediate(1.f) / (z + zOffset);
+        StarCoordIntermediate recipZ = Div(StarCoordIntermediate(1.f), (z + zOffset), 12, 4);
+        StarCoordIntermediate projRecipZ = Mul(proj, recipZ, 8);
+        StarCoordIntermediate screenX = Mul(x, projRecipZ, 10) + StarCoordIntermediate(0.5f);
         if((screenX < StarCoordIntermediate(1.f)) && (screenX > StarCoordIntermediate(0.f)))
         {
-            StarCoordIntermediate screenY = (proj * y * recipZ) + StarCoordIntermediate(0.5f);
+            StarCoordIntermediate screenY = Mul(y, projRecipZ, 10) + StarCoordIntermediate(0.5f);
             if((screenY < StarCoordIntermediate(1.f)) && (screenY > StarCoordIntermediate(0.f)))
             {
                 star2D.x = screenX;
                 star2D.y = screenY;
-#if 0
-                constexpr StarCoordIntermediate recipFarZ = StarCoordIntermediate(1.f) / (farZ);
-                StarCoordIntermediate brightness = StarCoordIntermediate(1.f) - (StarCoordIntermediate(z) * recipFarZ);
-#else
-                constexpr StarCoordIntermediate recipFarZ = StarCoordIntermediate(1.f) / (farZ + zOffset);
-                constexpr StarCoordIntermediate zeroBrightness = zOffset * recipFarZ;
-                StarCoordIntermediate brightness = /*StarCoordIntermediate(200.f) * */zOffset * recipZ;
+                constexpr StarCoordIntermediate recipFarZ = Div(StarCoordIntermediate(1.f), (farZ + zOffset), 12, 4);
+                constexpr StarCoordIntermediate zeroBrightness = Mul(zOffset, recipFarZ, 16);
+                StarCoordIntermediate brightness = Mul(zOffset, recipZ, 16);
                 brightness -= zeroBrightness;
-#endif
                 if(brightness > StarCoordIntermediate(0.f))
                 {
                     if(brightness > StarCoordIntermediate(1.f))
@@ -85,7 +83,7 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
                 }
             }
         }
-        LOG_INFO("x: %f, y: %f\n", (float) star2D.x, (float) star2D.y);
+        LOG_INFO(StarDetails, "x: %f, y: %f\n", (float) star2D.x, (float) star2D.y);
     }
 
 #if 0
