@@ -15,8 +15,6 @@ void Log::Init()
 {
 #if LOG_ENABLED
     mutex_init(&s_logMutex);
-    stdio_init_all();
-    sleep_ms(2000); //< Give a chance to attach a terminal
 #endif
 }
 

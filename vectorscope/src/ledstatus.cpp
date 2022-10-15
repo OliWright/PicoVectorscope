@@ -4,7 +4,6 @@
 #include <stdio.h>
 
 LedStatus::Step LedStatus::s_steps[LedStatus::kMaxSteps] = {};
-repeating_timer_t LedStatus::s_timer;
 uint32_t LedStatus::s_currentStep = 0;
 uint32_t LedStatus::s_subStepTickCounter = 0;
 uint32_t LedStatus::s_numSteps = 0;

@@ -36,7 +36,6 @@ private:
     };
 
     static Step s_steps[kMaxSteps];
-    static repeating_timer_t s_timer;
     static uint32_t s_currentStep;
     static uint32_t s_subStepTickCounter;
     static uint32_t s_numSteps;

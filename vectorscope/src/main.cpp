@@ -6,6 +6,7 @@
 #include "ledstatus.h"
 #include "buttons.h"
 #include "demo.h"
+#include "serial.h"
 
 #include "math.h"
 #include "pico/multicore.h"
@@ -161,6 +162,7 @@ void displayListUpdateTask()
 
 int main()
 {
+    Serial::Init();
     Log::Init();
     LedStatus::Init();
     LedStatus::SetStep(0, LedStatus::Brightness(1.f), 400);
