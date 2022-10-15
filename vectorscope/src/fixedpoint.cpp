@@ -17,6 +17,28 @@ uint32_t SimpleRand()
 typedef FixedPoint<14, int16_t, int32_t, true /*doClamping*/> FixedPoint_S2_14;
 typedef FixedPoint<26, int32_t, int32_t, false> FixedPoint_S6_26;
 typedef FixedPoint<18, int32_t, int32_t, false> FixedPoint_S14_18;
+typedef FixedPoint<11, int32_t, int32_t, false> FixedPoint_S21_11;
+
+static constexpr inline float floatabs(float val)
+{
+    return (val < 0.f) ? -val : val;
+}
+
+template<typename TFixedPoint>
+static constexpr inline bool equal(TFixedPoint val, float expected, float epsilon = 0.01f)
+{
+    return floatabs((float) val - expected) < epsilon;
+}
+
+constexpr FixedPoint_S2_14::MathsIntermediateType kTestFixed = FixedPoint_S2_14(0.1f) + (FixedPoint_S2_14(0.8f / (float) 64) * 64);
+constexpr float kTestFloat = (float) kTestFixed;
+
+static_assert(equal(FixedPoint_S2_14(0.1f) * 0.1f, 0.01f), "");
+static_assert(equal(FixedPoint_S14_18(100.f).recip(), 0.01f), "");
+static_assert(equal(FixedPoint_S14_18(100.25f).frac(), 0.25f), "");
+static_assert(equal(FixedPoint_S2_14(0.1f) * FixedPoint_S2_14(0.1f).recip(), 1.f), "");
+static_assert(equal(FixedPoint_S2_14(0.1f) + (FixedPoint_S2_14(0.8f / (float) 64) * 64), 0.9f), "");
+static_assert(equal(FixedPoint_S21_11(1.f / (float) 64) + (FixedPoint_S21_11(1.f / (float) 64) * 63), 1.f), "");
 
 void TestFixedPoint()
 {

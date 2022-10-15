@@ -141,3 +141,44 @@ void PushGameShape(DisplayList& displayList, const FloatTransform2D& transform, 
     }
     PushShapeToDisplayList(displayList, points, numPoints, intensity, false, transform);
 }
+
+uint32_t FragmentGameShape(GameShape shape,
+                           const FloatTransform2D& transform,
+                           Fragment* outFragments,
+                           uint32_t outFragmentsCapacity)
+{
+    const CompactVector* vector = s_gameShapeVectors + s_gameShapes[(int)shape][0];
+    const CompactVector* end = vector + s_gameShapes[(int)shape][1];
+
+    constexpr uint32_t kMaxPoints = 32;
+    ShapeVector2 points[kMaxPoints];
+
+	uint32_t numFragments = 0;
+
+    const int8_t* offset = s_gameShapeOffsets[(int) shape];
+    points[0].x = (float) offset[0] * 0.125f;
+    points[0].y = (float) offset[1] * 0.125f;
+    uint32_t numPoints = 1;
+    while (vector != end)
+    {
+        if (vector->onOff == 0)
+        {
+            // Flush the current shape
+            if (numPoints > 1)
+            {
+				numFragments += FragmentShape(points, numPoints, false, transform, outFragments + numFragments, outFragmentsCapacity - numFragments);
+            }
+			if(numFragments >= outFragmentsCapacity)
+			{
+				break;
+			}
+            numPoints = 0;
+        }
+        points[numPoints].x = ((float)(vector->x + offset[0])) * 0.125f;
+        points[numPoints].y = ((float)(vector->y + offset[1])) * 0.125f;
+        ++numPoints;
+        ++vector;
+    }
+	numFragments += FragmentShape(points, numPoints, false, transform, outFragments + numFragments, outFragmentsCapacity - numFragments);
+	return numFragments;
+}

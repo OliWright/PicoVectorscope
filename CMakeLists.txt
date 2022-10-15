@@ -33,7 +33,6 @@ target_sources(${PROJECT_NAME} PRIVATE
         src/spacerocksinspace.cpp
         src/spiral.cpp
         src/raster.cpp
-        src/textandshapes.cpp
         src/starfield.cpp
 )
 

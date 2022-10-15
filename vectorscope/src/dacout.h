@@ -12,17 +12,29 @@ class DacOutput
 public:
     static void Init(const DacOutputPioSmConfig& idleSm);
 
-    static inline uint32_t* AllocateBufferSpace(uint32_t numEntries)
+    static inline uint32_t* AllocateBufferSpace(uint32_t numEntriesRequested, uint32_t& outNumEntriesAllocated)
     {
+        uint32_t* pBufferSpace;
         // Do we have room in the current buffer?
-        if ((s_currentEntryIdx + numEntries) > kNumEntriesPerBuffer)
+        const uint32_t numEntriesAvailable = (kNumEntriesPerBuffer - s_currentEntryIdx);
+        if (numEntriesAvailable >= numEntriesRequested)
         {
-            // No.
-            Flush();
+            // Yes we do.  Happy days!
+            outNumEntriesAllocated = numEntriesRequested;
         }
-        // We should do now.
-        uint32_t* pBufferSpace = s_buffers[s_currentBufferIdx] + s_currentEntryIdx;
-        s_currentEntryIdx += numEntries;
+        else if(numEntriesAvailable > 64)
+        {
+            // They can make do with what there is
+            outNumEntriesAllocated = numEntriesAvailable;
+        }
+        else
+        {
+            // Let's move to the next buffer
+            Flush();
+            outNumEntriesAllocated = (numEntriesRequested > kNumEntriesPerBuffer) ? kNumEntriesPerBuffer : numEntriesRequested;
+        }
+        pBufferSpace = s_buffers[s_currentBufferIdx] + s_currentEntryIdx;
+        s_currentEntryIdx += outNumEntriesAllocated;
         return pBufferSpace;
     }
     static void Flush(bool finalFlushForFrame = false);
@@ -72,12 +84,10 @@ private:
         void EnableChaining()
         {
             dma_channel_set_config(m_channelIdx, &m_configWithChain, false);
-            //LOG_INFO("Chain on %d\n", m_channelIdx);
         }
         void DisableChaining()
         {
             dma_channel_set_config(m_channelIdx, &m_configWithoutChain, false);
-            //LOG_INFO("Chain off %d\n", m_channelIdx);
         }
         void ConfigurePioSm(io_wo_32* pioTxFifo, uint32_t dreq)
         {

@@ -19,7 +19,7 @@ static const DacOutputPioSmConfig* s_activePioSmConfig = nullptr;
 
 static critical_section_t s_dmaCriticalSection = {};
 
-static LogChannel DacOutputSynchronisation(false);
+static LogChannel DacOutputSynchronisation(true);
 
 void DacOutput::Init(const DacOutputPioSmConfig& idleSm)
 {
@@ -102,6 +102,7 @@ void DacOutput::Flush(bool finalFlushForFrame)
         {
             // Enable chaining on the previous DMA channel so that if it's still running,
             // it will chain to this one automatically
+            LOG_INFO(DacOutputSynchronisation, "Chain [%d, %d]\n", (s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers, s_currentBufferIdx);
             s_dmaChannels[(s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers].EnableChaining();
         }
         else

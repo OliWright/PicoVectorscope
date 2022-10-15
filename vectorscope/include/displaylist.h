@@ -13,7 +13,7 @@
 typedef FixedPoint<14, int16_t, int32_t, false> DisplayListScalar;
 //typedef DisplayListScalar::MathsIntermediateType DisplayListIntermediate;
 typedef FixedPoint<26, int32_t, int32_t, false> DisplayListIntermediate;
-typedef FixedPoint<13, int32_t, int32_t, false> Intensity;
+typedef FixedPoint<11, int32_t, int32_t, false> Intensity;
 #else
 typedef float DisplayListScalar;
 typedef float DisplayListIntermediate;

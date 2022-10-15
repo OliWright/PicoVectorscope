@@ -64,3 +64,79 @@ void PushShapeToDisplayList(DisplayList& displayList,
         pushVector(displayList, point0, intensity);
     }
 }
+
+void Fragment::Init(const DisplayListVector2& a, const DisplayListVector2& b)
+{
+    m_position.x = (a.x + b.x) * 0.5f;
+    m_position.y = (a.y + b.y) * 0.5f;
+
+    m_normalisedLineDirection.x = b.x - a.x;
+    m_normalisedLineDirection.y = b.y - a.y;
+
+    m_length = ((m_normalisedLineDirection.x * m_normalisedLineDirection.x) + (m_normalisedLineDirection.y * m_normalisedLineDirection.y)).sqrt();
+    DisplayListScalar::MathsIntermediateType recipLength = m_length.recip();
+    m_normalisedLineDirection.x *= recipLength;
+    m_normalisedLineDirection.y *= recipLength;
+
+    m_intensity = 1.f;
+    m_rotationSpeed = 0;
+    m_velocity.x = 0;
+    m_velocity.y = 0;
+}
+
+uint32_t FragmentShape(const ShapeVector2* points,
+                       uint32_t numPoints,
+                       bool closed,
+                       const FloatTransform2D& transform,
+                       Fragment* outFragments,
+                       uint32_t outFragmentsCapacity)
+{
+    if(outFragmentsCapacity == 0)
+    {
+        return 0;
+    }
+    uint32_t numFragments = 0;
+
+    Vector2<float> fPoint;
+    transform.transformVector(fPoint, points[0]);
+    DisplayListVector2 point0(saturate(fPoint.x), saturate(fPoint.y));
+    DisplayListVector2 previousPoint = point0;
+    for (uint i = 1; i < numPoints; ++i)
+    {
+        transform.transformVector(fPoint, points[i]);
+        DisplayListVector2 point(saturate(fPoint.x), saturate(fPoint.y));
+        (*outFragments++).Init(previousPoint, point);
+        if(++numFragments == outFragmentsCapacity)
+        {
+            return numFragments;
+        }
+
+        previousPoint = point;
+    }
+    if (closed)
+    {
+        (*outFragments).Init(previousPoint, point0);
+        ++numFragments;
+    }
+
+    return numFragments;
+}
+
+void PushFragmentsToDisplayList(DisplayList& displayList, const Fragment* fragments, uint32_t numFragments)
+{
+    const Fragment* endFragment = fragments + numFragments;
+    for(;fragments != endFragment; ++fragments)
+    {
+        const Fragment& fragment = *fragments;
+        DisplayListVector2 point;
+        DisplayListVector2 halfEdge;
+        halfEdge.x = fragment.m_normalisedLineDirection.x * fragment.m_length * 0.5f;
+        halfEdge.y = fragment.m_normalisedLineDirection.y * fragment.m_length * 0.5f;
+        point.x = fragment.m_position.x - halfEdge.x;
+        point.y = fragment.m_position.y - halfEdge.y;
+        displayList.PushVector(point, 0.f);
+        point.x = fragment.m_position.x + halfEdge.x;
+        point.y = fragment.m_position.y + halfEdge.y;
+        displayList.PushVector(point, fragment.m_intensity);
+    }
+}

@@ -81,29 +81,26 @@ void DisplayList::PushVector(DisplayListScalar x, DisplayListScalar y, Intensity
     vector.y = (y * calibrationScale.y) + calibrationBias.y;
     DisplayListScalar::MathsIntermediateType dx = vector.x - previous.x;
     DisplayListScalar::MathsIntermediateType dy = vector.y - previous.y;
-    intensity = intensity * intensity;
+    intensity = Mul(intensity, intensity);
 #if 1
     // Fixed point sqrt
     Intensity::MathsIntermediateType length = ((dx * dx) + (dy * dy)).sqrt();
-    Intensity::MathsIntermediateType time = intensity * length;
-    vector.numSteps = (uint16_t)((time * SPEED_CONSTANT).getIntegerPart() + 1);
+    Intensity::MathsIntermediateType time = Mul(intensity, length);
+    uint32_t numSteps = (time * SPEED_CONSTANT).getIntegerPart() + 1;
 #elif 1
     // Quake rsqrt
     float length2 = fix2float(((dx * dx) + (dy * dy)).getStorage(), DisplayListIntermediate::kNumFractionalBits);
     Intensity::MathsIntermediateType recipLength = (Intensity::MathsIntermediateType::StorageType) float2fix(Q_rsqrt(length2), Intensity::MathsIntermediateType::kNumFractionalBits);
     Intensity::MathsIntermediateType time = intensity / recipLength;
-    vector.numSteps = (uint16_t)((time * SPEED_CONSTANT).getIntegerPart() + 1);
+    uint32_t numSteps = ((time * SPEED_CONSTANT).getIntegerPart() + 1);
 #else
     // Built in floating point sqrtf
     float length2 = fix2float(((dx * dx) + (dy * dy)).getStorage(), DisplayListIntermediate::kNumFractionalBits);
     float length = sqrtf(length2);
     float time = length * (float)intensity;
-    vector.numSteps = (uint16_t)(time * SPEED_CONSTANT) + 1;
+    uint32_t numSteps = (time * SPEED_CONSTANT) + 1;
 #endif
-    if(vector.numSteps > 8192)
-    {
-        vector.numSteps = 8192;
-    }
+    vector.numSteps = (numSteps > 0xffff) ? 0xffff : (uint16_t) numSteps;
 #if STEP_DIV_IN_DISPLAY_LIST
     vector.stepX = DisplayListIntermediate(dx) / vector.numSteps;
     vector.stepY = DisplayListIntermediate(dy) / vector.numSteps;
@@ -183,25 +180,31 @@ void DisplayList::OutputToDACs()
         for (; pItem != pEnd; ++pItem)
         {
             const DisplayListVector& vector = *pItem;
+            uint32_t numSteps = vector.numSteps;
+            if(numSteps > 8192) numSteps = 8192;
 #if STEP_DIV_IN_DISPLAY_LIST
-            DisplayListIntermediate dx = vector.stepX;
-            DisplayListIntermediate dy = vector.stepY;
+            const DisplayListIntermediate dx = vector.stepX;
+            const DisplayListIntermediate dy = vector.stepY;
 #else
-            DisplayListIntermediate dx = DisplayListIntermediate(vector.x - x) / (int) vector.numSteps;
-            DisplayListIntermediate dy = DisplayListIntermediate(vector.y - y) / (int) vector.numSteps;
+            const DisplayListIntermediate dx = DisplayListIntermediate(vector.x - x) / (int) numSteps;
+            const DisplayListIntermediate dy = DisplayListIntermediate(vector.y - y) / (int) numSteps;
 #endif
-            //LOG_INFO("{%d",vector.numSteps);
-            uint32_t* pOutput = DacOutput::AllocateBufferSpace(vector.numSteps);
-            //LOG_INFO("}");
-            const uint32_t* pOutputEnd = pOutput + vector.numSteps;
-            for (; pOutput != pOutputEnd; ++pOutput)
+            uint32_t numStepsRemaining = numSteps;
+            while(numStepsRemaining)
             {
-                // Calculate the coordinate for this step of the vector
-                x += dx;
-                y += dy;
-                uint32_t bitsX = scalarTo12bit(x);
-                uint32_t bitsY = scalarTo12bit(y);
-                *pOutput = bitsX | (bitsY << 12) | (255 << 24);
+                uint32_t numStepsInBatch;
+                uint32_t* pOutput = DacOutput::AllocateBufferSpace(numStepsRemaining, numStepsInBatch);
+                const uint32_t* pOutputEnd = pOutput + numStepsInBatch;
+                for (; pOutput != pOutputEnd; ++pOutput)
+                {
+                    // Calculate the coordinate for this step of the vector
+                    x += dx;
+                    y += dy;
+                    uint32_t bitsX = scalarTo12bit(x);
+                    uint32_t bitsY = scalarTo12bit(y);
+                    *pOutput = bitsX | (bitsY << 12) | (255 << 24);
+                }
+                numStepsRemaining -= numStepsInBatch;
             }
             // Snap to the true end of the vector
             x = vector.x;
@@ -220,40 +223,48 @@ void DisplayList::OutputToDACs()
         for(uint32_t i = 0; i < kRepeatCount; ++i)
         {
             DisplayListPoint* pPoint = m_pDisplayListPoints;
-            DisplayListPoint* pEnd = pPoint + m_numDisplayListPoints;
-            uint32_t* pOutput = DacOutput::AllocateBufferSpace(m_numDisplayListPoints);
+            uint32_t numPointsRemaining = m_numDisplayListPoints;
 
-            for (; pPoint != pEnd; ++pPoint, ++pOutput)
+            while(numPointsRemaining)
             {
-                const DisplayListPoint& point = *pPoint;
-                uint32_t bitsX = point.x.getStorage() >> (point.x.kNumFractionalBits - 12);
-                uint32_t bitsY = point.y.getStorage() >> (point.y.kNumFractionalBits - 12);
-                uint32_t bits = bitsX | (bitsY << 12);
+                uint32_t numPointsInBatch;
+                uint32_t* pOutput = DacOutput::AllocateBufferSpace(numPointsRemaining, numPointsInBatch);
 
-                // Get Z in terms of how many points.pio cycles do we want the point to be held for.
-                // The max time we can have is 2044 cycles, so let's go with 11-bits for now
-                int32_t cycles = (int32_t) (point.brightness * point.brightness).getStorage() >> (point.brightness.kNumFractionalBits - 11);
-                // Subtract the 12 cycle per-point constant
-                cycles -= 12;
-                uint32_t bitsZ;
-                if(cycles > 254)
+                //DisplayListPoint* pEnd = pPoint + m_numDisplayListPoints;
+                const uint32_t* pOutputEnd = pOutput + numPointsInBatch;
+                for (; pOutput != pOutputEnd; ++pPoint, ++pOutput)
                 {
-                    // We need to use the long delay loop to accomplish this length of delay
-                    bits |= (1 << 24);
+                    const DisplayListPoint& point = *pPoint;
+                    uint32_t bitsX = point.x.getStorage() >> (point.x.kNumFractionalBits - 12);
+                    uint32_t bitsY = point.y.getStorage() >> (point.y.kNumFractionalBits - 12);
+                    uint32_t bits = bitsX | (bitsY << 12);
 
-                    bitsZ = cycles >> 4;
-                    if(bitsZ > 127)
+                    // Get Z in terms of how many points.pio cycles do we want the point to be held for.
+                    // The max time we can have is 2044 cycles, so let's go with 11-bits for now
+                    int32_t cycles = (int32_t) (point.brightness * point.brightness).getStorage() >> (point.brightness.kNumFractionalBits - 11);
+                    // Subtract the 12 cycle per-point constant
+                    cycles -= 12;
+                    uint32_t bitsZ;
+                    if(cycles > 254)
                     {
-                        bitsZ = 127;
+                        // We need to use the long delay loop to accomplish this length of delay
+                        bits |= (1 << 24);
+
+                        bitsZ = cycles >> 4;
+                        if(bitsZ > 127)
+                        {
+                            bitsZ = 127;
+                        }
                     }
+                    else
+                    {
+                        // Short delay is good
+                        bitsZ = (cycles < 0) ? 0 : (cycles >> 1);
+                    }
+                    bits |= (bitsZ << 25);
+                    *pOutput = bits;
                 }
-                else
-                {
-                    // Short delay is good
-                    bitsZ = (cycles < 0) ? 0 : (cycles >> 1);
-                }
-                bits |= (bitsZ << 25);
-                *pOutput = bits;
+                numPointsRemaining -= numPointsInBatch;
             }
         }
         //LOG_INFO("Out Points End\n");

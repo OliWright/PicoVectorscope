@@ -34,7 +34,7 @@ void Log::Print(const char *fmt, ...)
 
 #if LOG_ENABLED
 LogChannel::LogChannel(bool initialEnabled)
-: m_enabled(initialEnabled)
-, m_id(s_numChannels++)
+: m_id(s_numChannels++)
+, m_enabled(initialEnabled)
 {}
 #endif

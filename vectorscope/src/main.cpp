@@ -167,7 +167,7 @@ int main()
     LedStatus::SetStep(1, LedStatus::Brightness(0.f), 100);
     LedStatus::SetStep(3, LedStatus::Brightness(0.f), 100);
     LedStatus::SetStep(5, LedStatus::Brightness(0.f), 100);
-    LedStatus::SetStep(7, LedStatus::Brightness(0.f), 500);
+    LedStatus::SetStep(7, LedStatus::Brightness(0.f), 800);
 
     Buttons::Init();
 
@@ -178,8 +178,13 @@ int main()
     mutex_init(displayListMutex + 0);
     mutex_init(displayListMutex + 1);
 
-    pDisplayList[0] = new DisplayList(1024, 1024);
-    pDisplayList[1] = new DisplayList(1024, 1024);
+    pDisplayList[0] = new DisplayList(2048, 1024);
+    pDisplayList[1] = new DisplayList(2048, 1024);
+
+    for(uint i = 0; i < s_numDemos; ++i)
+    {
+        s_demos[i]->Init();
+    }
 
 #if 1
 #    if DAC_OUTPUT_CORE == 1

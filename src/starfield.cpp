@@ -1,6 +1,6 @@
 #include "picovectorscope.h"
 
-static constexpr uint32_t kNumStars = 512;
+static constexpr uint32_t kNumStars = 1000;
 typedef FixedPoint<7, int16_t, int32_t, false> StarCoordScalar;
 struct StarCoord
 {
@@ -9,8 +9,8 @@ struct StarCoord
 typedef FixedPoint<18, int32_t, int32_t, false> StarCoordIntermediate;
 static StarCoord s_stars[kNumStars];
 
-//static constexpr StarCoordScalar kStarSpeed(0.1f);
-static constexpr StarCoordScalar kStarSpeed(2.f);
+//static constexpr StarCoordScalar s_starSpeed(0.1f);
+static StarCoordScalar s_starSpeed(2.f);
 static LogChannel StarDetails(false);
 
 class Starfield : public Demo
@@ -21,7 +21,6 @@ public:
 static Starfield s_starfield;
 
 void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
-
 {
     static bool doneInit = false;
     if(!doneInit)
@@ -38,6 +37,17 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
         }
     }
 
+    if(Buttons::IsJustPressed(Buttons::Id::Left))
+    {
+        //s_starSpeed *= 0.75f; <--- Broken
+        s_starSpeed = s_starSpeed * 0.75f;
+    }
+    if(Buttons::IsJustPressed(Buttons::Id::Right))
+    {
+        s_starSpeed = s_starSpeed * 1.25f;
+    }
+
+
     DisplayListPoint star2D = {0.f, 0.f, 0.2f};
     LOG_INFO(StarDetails, "Stars update\n");
     constexpr StarCoordIntermediate proj = StarCoordIntermediate(0.25f);
@@ -46,7 +56,7 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
     for(uint32_t i = 0; i < kNumStars; ++i)
     {
         StarCoord& star = s_stars[i];
-        star.z -= kStarSpeed;
+        star.z -= s_starSpeed;
         if(star.z < StarCoordScalar(0.f))
         {
             star.z += StarCoordScalar(StarCoordScalar::kMaxStorageType);

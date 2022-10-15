@@ -28,13 +28,20 @@ void Spiral::UpdateAndRender(DisplayList& displayList, float dt)
 
     constexpr uint32_t kCount = 15;
 
+#if 1
+    static uint32_t brightIdx = 0;
+    if(++brightIdx == kCount)
+    {
+        brightIdx = 0;
+    }
+#else
     static float brightCycle = 0.f;
     brightCycle += (dt * 20.f);
     if(brightCycle >= (float) kCount)
     {
         brightCycle -= (float) kCount;
     }
-    uint32_t brightIdx = (uint32_t) brightCycle;
+#endif
 
     PushShapeToDisplayList(displayList, points, kNumPoints, 1.f, true /*closed*/);
 
@@ -50,10 +57,10 @@ void Spiral::UpdateAndRender(DisplayList& displayList, float dt)
         float scale = 1.f - ((float) i / kCount);
         localTransform *= scale;
         localTransform.setTranslation(FloatVector2(0.5f, 0.5f));
-        intensity = 0.5f;//1.f - ((float) i / kCount);
+        intensity = 0.75f;//1.f - ((float) i / kCount);
         if(i == brightIdx)
         {
-            intensity = 2.f;
+            intensity = 4.f;
         }
         PushShapeToDisplayList(displayList, points, kNumPoints, intensity, true /*closed*/, localTransform);
     }
