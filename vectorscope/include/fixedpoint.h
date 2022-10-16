@@ -43,6 +43,16 @@ public:
         return storageTypeToFloat(m_storage);
     }
 
+    explicit constexpr operator int() const
+    {
+        return (int) (m_storage >> kNumFractionalBits);
+    }
+
+    explicit constexpr operator unsigned int() const
+    {
+        return (unsigned int) (m_storage >> kNumFractionalBits);
+    }
+
     template <unsigned int rhsNumFractionalBits, typename rhsTStorageType>
     MathsIntermediateFixedPoint(const MathsIntermediateFixedPoint<rhsNumFractionalBits, rhsTStorageType>& rhs)
     {
@@ -218,6 +228,17 @@ public:
     {
         return storageTypeToFloat(m_storage);
     }
+
+    explicit constexpr operator int() const
+    {
+        return (int) (m_storage >> kNumFractionalBits);
+    }
+
+    explicit constexpr operator unsigned int() const
+    {
+        return (unsigned int) (m_storage >> kNumFractionalBits);
+    }
+
     constexpr operator MathsIntermediateType() const
     {
         return { (MathsIntermediateStorageType)m_storage };
@@ -245,6 +266,11 @@ public:
     constexpr MathsIntermediateType operator+(const FixedPoint& rhs) const
     {
         return (MathsIntermediateType) * this + (MathsIntermediateType)rhs;
+    }
+
+    constexpr MathsIntermediateType operator-() const
+    {
+        return (MathsIntermediateType)-m_storage;
     }
 
     constexpr MathsIntermediateType operator-(const FixedPoint& rhs) const

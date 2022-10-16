@@ -9,6 +9,7 @@ static constexpr uint32_t kBulletLife = 60;
 static constexpr DisplayListScalar kGlobalScale(0.015f);
 static constexpr float kGlobalScaleFloat = (float) kGlobalScale;
 static constexpr DisplayListScalar kParticleSpeed(0.01f);
+static constexpr DisplayListScalar kFragmentSpeed(0.002f);
 static constexpr float kPlayerShipRotationSpeed = 0.1f;
 static constexpr DisplayListScalar kThrust = 0.0003f;
 static constexpr DisplayListScalar kDrag = 0.99f;
@@ -29,6 +30,7 @@ static const char* s_title = "SPACE ROCKS\nIN\nSPACE";
 static const BurnLength s_titleTotalBurnLength = CalcBurnLength(s_title);
 static const char* s_gameOver = "GAME\nOVER";
 static const BurnLength s_gameOverTotalBurnLength = CalcBurnLength(s_gameOver);
+static FloatTransform2D s_titleTextTransform;
 
 static uint32_t s_frameCounter = 0;
 
@@ -83,6 +85,73 @@ static bool testCollisionOctagon(const DisplayListVector2& p0, const DisplayList
 // Classes and Structs
 //
 
+struct Fragments
+{
+    static void Reset()
+    {
+        for(uint i = 0; i < kMaxFragments; ++i)
+        {
+            s_fragments[i].m_intensity = 0;
+        }
+        s_numFragments = 0;
+    }
+
+    static void UpdateAndDraw(DisplayList& displayList)
+    {
+        for(uint i = 0; i < s_numFragments; ++i)
+        {
+            Fragment& fragment = s_fragments[i];
+            fragment.m_intensity -= 0.01f;
+            if(fragment.m_intensity < 0)
+            {
+                // Fragment is dead
+                // Swap this slot with the end
+                fragment = s_fragments[--s_numFragments];
+                --i;
+                continue;
+            }
+            
+            fragment.Move();
+        }
+
+        PushFragmentsToDisplayList(displayList, s_fragments, s_numFragments);
+    }
+
+    static void Add(GameShape shape, const DisplayListVector2& baseSpeed, const FloatTransform2D& transform, Intensity intensity)
+    {
+        uint numNewFragments = FragmentGameShape(shape, transform, s_fragments + s_numFragments, kMaxFragments - s_numFragments);
+        for(uint i = 0; i < numNewFragments; ++i)
+        {
+            Fragment& fragment = s_fragments[s_numFragments + i];
+            fragment.m_velocity.x = baseSpeed.x + (kFragmentSpeed * DisplayListScalar::randMinusOneToOne());
+            fragment.m_velocity.y = baseSpeed.y + (kFragmentSpeed * DisplayListScalar::randMinusOneToOne());
+            fragment.m_intensity = intensity;
+            fragment.m_rotationSpeed = DisplayListScalar::randMinusOneToOne() * 0.05f;
+        }
+        s_numFragments += numNewFragments;
+    }
+
+    static void Add(const char* message, const FloatTransform2D& transform)
+    {
+        uint numNewFragments = FragmentText(message, transform, s_fragments + s_numFragments, kMaxFragments - s_numFragments, true);
+        for(uint i = 0; i < numNewFragments; ++i)
+        {
+            Fragment& fragment = s_fragments[s_numFragments + i];
+            fragment.m_velocity.x = (kFragmentSpeed * DisplayListScalar::randMinusOneToOne()) * 0.5f;
+            fragment.m_velocity.y = (kFragmentSpeed * DisplayListScalar::randMinusOneToOne()) * 0.5f;
+            fragment.m_intensity = 2.f;
+            fragment.m_rotationSpeed = DisplayListScalar::randMinusOneToOne() * 0.02f;
+        }
+        s_numFragments += numNewFragments;
+    }
+
+    static constexpr uint kMaxFragments = 256;
+    static Fragment s_fragments[kMaxFragments];
+    static uint s_numFragments;
+};
+Fragment Fragments::s_fragments[Fragments::kMaxFragments] = {};
+uint Fragments::s_numFragments = 0;
+
 // Base class for all objects in the game.
 // This is classic OOP.
 struct BaseObject
@@ -126,7 +195,10 @@ struct ShapeObject : public BaseObject
 
     void CalcTransform(FloatTransform2D& outTransform)
     {
-        outTransform.setAsRotation(m_rotation, FloatVector2(0.f, 0.f));
+        float s, c;
+        sincosf(m_rotation, &s, &c);
+
+        outTransform.setAsRotation(s, c, FloatVector2(0.f, 0.f));
         outTransform *= m_scale;
         outTransform.setTranslation(FloatVector2((float) m_position.x, (float) m_position.y));
     }
@@ -409,6 +481,9 @@ struct Asteroid : public ShapeObject
         if(m_numHitsToDestroy <= 0)
         {
             // Break the asteroid apart
+            FloatTransform2D transform;
+            CalcTransform(transform);
+            Fragments::Add(m_shape, m_velocity, transform, 1.f);
             Destroy();
             if(m_size != Size::eSmall)
             {
@@ -519,10 +594,14 @@ struct PlayerShip : public ShapeObject
             {
                 // Boom
                 m_active = false;
-                // DisplayListVector2 particleVelocity;
-                // particleVelocity.x = (asteroid.m_velocity.x + m_velocity.x) * 0.5f;
-                // particleVelocity.y = (asteroid.m_velocity.y + m_velocity.y) * 0.5f;
-                Particle::Emit(m_position, asteroid.m_velocity, 1.f, 32);
+                DisplayListVector2 particleVelocity;
+                particleVelocity.x = (asteroid.m_velocity.x + m_velocity.x) * 0.5f;
+                particleVelocity.y = (asteroid.m_velocity.y + m_velocity.y) * 0.5f;
+                Particle::Emit(m_position, particleVelocity, 1.f, 8);
+
+                FloatTransform2D transform;
+                CalcTransform(transform);
+                Fragments::Add(m_shape, m_velocity, transform, 4.f);
 
                 return;
             }
@@ -545,6 +624,7 @@ struct GameState
     enum State
     {
         AttractModeTitle,
+        AttractModeTitleDestroyed,
         AttractModeDemo,
         GameStartLevel,
         GameWaitForShipSafe,
@@ -593,6 +673,11 @@ struct GameState
             case State::AttractModeTitle:
                 // Nice clean title screen
                 Asteroid::DestroyAll();
+                Fragments::Reset();
+                break;
+
+            case State::AttractModeTitleDestroyed:
+                Fragments::Add(s_title, s_titleTextTransform);
                 break;
 
             case State::AttractModeDemo:
@@ -709,7 +794,8 @@ struct GameState
 };
 
 const GameState::StateInfo GameState::s_stateInfo[] = {
-    {10.f, State::AttractModeDemo}, // AttractModeTitle
+    {10.f, State::AttractModeTitleDestroyed}, // AttractModeTitle
+    {2.f, State::AttractModeDemo}, // AttractModeTitleDestroyed
     {10.f, State::AttractModeTitle}, // AttractModeDemo
     {0}, // GameStartLevel
     {0}, // GameWaitForShipSafe
@@ -732,11 +818,17 @@ uint GameState::s_level;
 class SpaceRocksInSpace : public Demo
 {
 public:
+    void Init();
     void UpdateAndRender(DisplayList& displayList, float dt);
 };
 static SpaceRocksInSpace s_spaceRocksInSpace;
 
 constexpr BurnLength test = Mul(BurnLength(20.f), BurnLength(10.f));
+
+void SpaceRocksInSpace::Init()
+{
+    CalcTextTransform(DisplayListVector2(0.5f, 0.7f), 0.08f, s_titleTextTransform);
+}
 
 void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
 {
@@ -756,11 +848,9 @@ void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
     }
     if(message != nullptr)
     {
-        FloatTransform2D transform;
-        CalcTextTransform(DisplayListVector2(0.5f, 0.7f), 0.08f, transform);
         //BurnLength burnLength = Mul(BurnLength(GameState::s_timeInCurrentState), BurnLength(20.f));
         BurnLength burnLength = Mul(BurnLength(20.f), GameState::s_timeInCurrentState, 0, 4);
-        TextPrint(displayList, transform, message, Intensity(1.f), burnLength, true);
+        TextPrint(displayList, s_titleTextTransform, message, Intensity(1.f), burnLength, true);
     }
 
     if(Buttons::IsHeld(Buttons::Id::Left))
@@ -808,6 +898,7 @@ void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
     }
 
     Particle::UpdateAndDrawAll(displayList);
+    Fragments::UpdateAndDraw(displayList);
 
     ++s_frameCounter;
 }

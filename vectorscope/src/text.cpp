@@ -287,6 +287,25 @@ static int32_t calcXOffset(const char* message, bool centre)
     return x_offset;
 }
 
+static bool processChar(const uint8_t* chr, int32_t& x_offset, int32_t& y_offset, const CompactVector*& vector, const CompactVector*& end, bool centre)
+{
+    uint32_t ascii_code = *chr;
+    if (ascii_code == '\n')
+    {
+        x_offset = calcXOffset((const char*)chr+1, centre);
+        y_offset -= 10;
+        return false;
+    }
+    if (ascii_code == ' ')
+    {
+        x_offset += 6;
+        return false;
+    }
+    vector = s_characterVectors + s_characters[ascii_code][0];
+    end = vector + s_characters[ascii_code][1];
+    return vector != end;
+}
+
 
 void TextPrint(DisplayList& displayList, const FloatTransform2D& transform, const char* message, Intensity intensity, BurnLength burnLength, bool centre)
 {
@@ -297,22 +316,12 @@ void TextPrint(DisplayList& displayList, const FloatTransform2D& transform, cons
     int32_t y_offset = -7;
     for (const uint8_t* chr = (uint8_t*)message; *chr != 0; ++chr)
     {
-        uint32_t ascii_code = *chr;
-        if (ascii_code == '\n')
+        const CompactVector* vector;
+        const CompactVector* end;
+        if(!processChar(chr, x_offset, y_offset, vector, end, centre))
         {
-            x_offset = calcXOffset((const char*)chr+1, centre);
-            y_offset -= 10;
             continue;
         }
-        if (ascii_code == ' ')
-        {
-            x_offset += 6;
-            continue;
-        }
-        const CompactVector* vector = s_characterVectors + s_characters[ascii_code][0];
-        const CompactVector* end = vector + s_characters[ascii_code][1];
-        if (vector == end)
-            continue;
         points[0].x = ((float)x_offset) * 0.166f;
         points[0].y = ((float)y_offset) * 0.166f;
         uint numPoints = 1;
@@ -371,5 +380,57 @@ void CalcTextTransform(const DisplayListVector2& pos, const DisplayListScalar& s
 {
     outTranform.setAsScale((float) scale);
     outTranform.setTranslation(FloatVector2((float) pos.x, (float) pos.y));
+}
 
+uint32_t FragmentText(const char* message,
+                      const FloatTransform2D& transform,
+                      Fragment* outFragments,
+                      uint32_t outFragmentsCapacity,
+                      bool centre)
+{
+    constexpr uint32_t kMaxPoints = 8;
+    ShapeVector2 points[kMaxPoints];
+    uint32_t numFragments = 0;
+
+    int32_t x_offset = calcXOffset(message, centre);
+    int32_t y_offset = -7;
+    for (const uint8_t* chr = (uint8_t*)message; *chr != 0; ++chr)
+    {
+        const CompactVector* vector;
+        const CompactVector* end;
+        if(!processChar(chr, x_offset, y_offset, vector, end, centre))
+        {
+            continue;
+        }
+        points[0].x = ((float)x_offset) * 0.166f;
+        points[0].y = ((float)y_offset) * 0.166f;
+        uint numPoints = 1;
+        while (vector != end)
+        {
+            if (vector->onOff == 0)
+            {
+                // Flush the current shape
+                if (numPoints > 1)
+                {
+                    numFragments += FragmentShape(points, numPoints, false, transform, outFragments + numFragments, outFragmentsCapacity - numFragments);
+                }
+                numPoints = 0;
+                if(numFragments >= outFragmentsCapacity)
+                {
+                    break;
+                }
+            }
+            points[numPoints].x = ((float)(x_offset + vector->x)) * 0.166f;
+            points[numPoints].y = ((float)(y_offset + vector->y)) * 0.166f;
+            ++numPoints;
+            ++vector;
+        }
+        numFragments += FragmentShape(points, numPoints, false, transform, outFragments + numFragments, outFragmentsCapacity - numFragments);
+        if(numFragments >= outFragmentsCapacity)
+        {
+            break;
+        }
+        x_offset += 6;
+    }
+    return numFragments;
 }

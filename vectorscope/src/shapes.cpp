@@ -1,4 +1,5 @@
 #include "shapes.h"
+#include "sintable.h"
 
 #include "transform2d.h"
 
@@ -82,6 +83,26 @@ void Fragment::Init(const DisplayListVector2& a, const DisplayListVector2& b)
     m_rotationSpeed = 0;
     m_velocity.x = 0;
     m_velocity.y = 0;
+}
+
+void Fragment::Move()
+{
+#if 1
+    FixedTransform2D transform;
+    SinTableValue s, c;
+    SinTable::SinCos(m_rotationSpeed, s, c);
+    transform.setAsRotation(s, c);
+
+    FixedTransform2D::Vector2Type dir;
+    dir.x = m_normalisedLineDirection.x;
+    dir.y = m_normalisedLineDirection.y;
+    FixedTransform2D::Vector2Type newDir;
+    transform.transformVector(newDir, dir);
+    m_normalisedLineDirection.x = newDir.x;
+    m_normalisedLineDirection.y = newDir.y;
+#endif
+    m_position.x += m_velocity.x;
+    m_position.y += m_velocity.y;
 }
 
 uint32_t FragmentShape(const ShapeVector2* points,

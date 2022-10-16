@@ -27,6 +27,7 @@ struct Fragment
     Intensity          m_intensity;
 
     void Init(const DisplayListVector2& a, const DisplayListVector2& b);
+    void Move();
 };
 
 uint32_t FragmentShape(const ShapeVector2* points,

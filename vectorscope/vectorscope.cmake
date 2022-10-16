@@ -14,9 +14,11 @@ target_sources(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src/gameshapes.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/ledstatus.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/log.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/lookuptable.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/main.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/serial.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/shapes.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/sintable.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/testcard.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/text.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/transform2d.cpp

@@ -12,16 +12,9 @@
 #if ENABLE_SERIAL
 static repeating_timer_t s_timer;
 static constexpr int32_t kFrequencyHz = 5;
-
-bool timerCallback(struct repeating_timer *t)
-{
-    if(getchar_timeout_us(0) == 'r')
-    {
-        reset_usb_boot(0, 0);
-    }
-    return true;
-}
 #endif
+
+char volatile Serial::s_lastCharIn = 0;
 
 void Serial::Init()
 {
@@ -33,4 +26,21 @@ void Serial::Init()
 #endif
     printf("\033[2J\033[H***********\nHello\n***********\n\n");
 #endif
+}
+
+bool Serial::timerCallback(struct repeating_timer *t)
+{
+    int getChar = getchar_timeout_us(0);
+
+    if(getChar >= 0)
+    {
+        s_lastCharIn = (char) getChar;
+
+        if(s_lastCharIn == 'r')
+        {
+            // We handle the reboot command here in case the main code is hung
+            reset_usb_boot(0, 0);
+        }
+    }
+    return true;
 }

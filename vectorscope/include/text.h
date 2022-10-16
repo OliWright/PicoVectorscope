@@ -8,6 +8,10 @@ void TextPrint(DisplayList& displayList, const FloatTransform2D& transform, cons
 
 void CalcTextTransform(const DisplayListVector2& pos, const DisplayListScalar& scale, FloatTransform2D& outTranform);
 
-
 BurnLength CalcBurnLength(const char* message);
 
+uint32_t FragmentText(const char* message,
+                      const FloatTransform2D& transform,
+                      Fragment* outFragments,
+                      uint32_t outFragmentsCapacity,
+                      bool centre);

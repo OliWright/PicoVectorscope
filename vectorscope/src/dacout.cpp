@@ -19,7 +19,7 @@ static const DacOutputPioSmConfig* s_activePioSmConfig = nullptr;
 
 static critical_section_t s_dmaCriticalSection = {};
 
-static LogChannel DacOutputSynchronisation(true);
+static LogChannel DacOutputSynchronisation(false);
 
 void DacOutput::Init(const DacOutputPioSmConfig& idleSm)
 {

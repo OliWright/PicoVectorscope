@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "fixedpoint.h"
 
 #include <math.h>
 #include "pico/float.h"
@@ -22,10 +23,8 @@ struct Transform2D
         m[2][1] = 0.f;
     }
 
-    void setAsRotation(ScalarType angle, const Vector2Type& origin)
+    void setAsRotation(ScalarType s, ScalarType c, const Vector2Type& origin = Vector2Type(0.f, 0.f))
     {
-        float s, c;
-        sincosf(angle, &s, &c);
         m[0][0] = c;
         m[0][1] = s;
         m[1][0] = -s;
@@ -93,3 +92,4 @@ struct Transform2D
 };
 
 typedef Transform2D<float> FloatTransform2D;
+typedef Transform2D<FixedPoint<12,int32_t,int32_t,false> > FixedTransform2D;

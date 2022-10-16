@@ -25,8 +25,10 @@ static constexpr uint64_t kNumMicrosBetweenFrames = 16667; // 60FPS
 //static constexpr uint64_t kNumMicrosBetweenFrames = 10000; // 100FPS
 static constexpr uint32_t kGeneralPurposeButtonPin = 20;
 static uint32_t coolDemoIdx = 0;
+static bool singleStepMode = false;
 
 static LogChannel FrameSynchronisation(false);
+static LogChannel Events(true);
 
 static inline uint32_t floatToOut(const float v)
 {
@@ -72,6 +74,17 @@ void checkButton()
             coolDemoIdx = 0;
         }
     }
+    switch(Serial::GetLastCharIn())
+    {
+        default:
+            break;
+
+        case 'x':
+            singleStepMode = !singleStepMode;
+            LOG_INFO(Events, "Single step mode: %b\n", singleStepMode);
+            Serial::ClearLastCharIn();
+            break;
+    }
 }
 
 void dacOutputLoop()
@@ -116,6 +129,17 @@ void displayListUpdateLoop()
     LOG_INFO(FrameSynchronisation, "Fill W: %d\n", displayListIdx);
     mutex_enter_blocking(displayListMutex + displayListIdx);
     LOG_INFO(FrameSynchronisation, "Fill S: %d\n", displayListIdx);
+
+    if(singleStepMode)
+    {
+        while(Serial::GetLastCharIn() != 's')
+        {
+            //LOG_INFO(Events, "Erm: '%c'\n", Serial::GetLastCharIn());
+            checkButton();
+        }
+        LOG_INFO(Events, "Step\n");//: '%c'\n", Serial::GetLastCharIn());
+        Serial::ClearLastCharIn();
+    }
 
     uint64_t frameStart = time_us_64();
 

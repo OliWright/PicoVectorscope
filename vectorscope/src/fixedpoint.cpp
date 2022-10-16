@@ -1,5 +1,6 @@
 #include "fixedpoint.h"
 #include "log.h"
+#include "sintable.h"
 
 #include <stdio.h>
 
@@ -80,13 +81,13 @@ void TestFixedPoint()
     a = FixedPoint_S2_14(0.5f).sqrt();
     LOG_INFO(FixedPointTesting, "a = %f (0.7071)\n", (float)a);
 
-    int32_t s = 0x10000;
-    s = FixedPointSqrt(s, 16);
-    LOG_INFO(FixedPointTesting, "a = 0x%08x (0x00010000)\n", s);
+    int32_t sq = 0x10000;
+    sq = FixedPointSqrt(sq, 16);
+    LOG_INFO(FixedPointTesting, "a = 0x%08x (0x00010000)\n", sq);
 
-    s = 0x4000;
-    s = FixedPointSqrt(s, 14);
-    LOG_INFO(FixedPointTesting, "a = 0x%08x (0x00004000)\n", s);
+    sq = 0x4000;
+    sq = FixedPointSqrt(sq, 14);
+    LOG_INFO(FixedPointTesting, "a = 0x%08x (0x00004000)\n", sq);
 
     FixedPoint_S6_26 b = FixedPoint_S6_26(FixedPoint_S2_14(0.3f) - FixedPoint_S2_14(0.1f));
     LOG_INFO(FixedPointTesting, "b = %f (0.2)\n", (float)b);
@@ -100,8 +101,16 @@ void TestFixedPoint()
     b = Div(FixedPoint_S6_26(1.f), FixedPoint_S6_26(8.f), 4, 1);
     LOG_INFO(FixedPointTesting, "b = %f (0.125)\n", (float)b);
 
-    FixedPoint_S14_18 c = Div(FixedPoint_S14_18(1.f), FixedPoint_S14_18(8.f), 11, 4);
-    LOG_INFO(FixedPointTesting, "c = %f (0.125)\n", (float)c);
+    FixedPoint_S14_18 d = Div(FixedPoint_S14_18(1.f), FixedPoint_S14_18(8.f), 11, 4);
+    LOG_INFO(FixedPointTesting, "d = %f (0.125)\n", (float)d);
+
+    LOG_INFO(FixedPointTesting, "s = %f (0.479)\n", (float)SinTable::LookUp(0.5f));
+    LOG_INFO(FixedPointTesting, "s = %f (0.0)\n", (float)SinTable::LookUp(0.f));
+    LOG_INFO(FixedPointTesting, "s = %f (0.0)\n", (float)SinTable::LookUp(kPi * 2.f));
+
+    SinTableValue s, c;
+    SinTable::SinCos(kPi * 2.f, s, c);
+    LOG_INFO(FixedPointTesting, "s = %f (0.0), c = %f (1.0)\n", (float)s, (float) c);
 
 #endif  
 }

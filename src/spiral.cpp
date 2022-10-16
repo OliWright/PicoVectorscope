@@ -47,12 +47,15 @@ void Spiral::UpdateAndRender(DisplayList& displayList, float dt)
 
     FloatTransform2D transform;
     FloatVector2 centre(0.5f, 0.5f);
-    transform.setAsRotation(phase/* + (float)i * 0.25f*/, centre);
+    float s, c;
+    sincosf(phase, &s, &c);
+    transform.setAsRotation(s, c, centre);
     transform *= 0.35f;
     FloatTransform2D localTransform;
     for (uint32_t i = 0; i < kCount; ++i)
     {
-        localTransform.setAsRotation(phase - (float)i * 0.02f, FloatVector2(0.f, 0.f));
+        sincosf(phase - (float)i * 0.02f, &s, &c);
+        localTransform.setAsRotation(s, c, FloatVector2(0.f, 0.f));
         localTransform *= 0.35f;
         float scale = 1.f - ((float) i / kCount);
         localTransform *= scale;

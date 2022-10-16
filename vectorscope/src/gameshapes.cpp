@@ -168,11 +168,11 @@ uint32_t FragmentGameShape(GameShape shape,
             {
 				numFragments += FragmentShape(points, numPoints, false, transform, outFragments + numFragments, outFragmentsCapacity - numFragments);
             }
+            numPoints = 0;
 			if(numFragments >= outFragmentsCapacity)
 			{
 				break;
 			}
-            numPoints = 0;
         }
         points[numPoints].x = ((float)(vector->x + offset[0])) * 0.125f;
         points[numPoints].y = ((float)(vector->y + offset[1])) * 0.125f;
