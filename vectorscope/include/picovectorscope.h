@@ -15,4 +15,5 @@
 #include "text.h"
 #include "transform2d.h"
 #include "types.h"
+#include "sintable.h"
 

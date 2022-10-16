@@ -5,12 +5,12 @@
 
 
 
-static inline float saturate(float val)
+static inline FixedTransform2D::ScalarType saturate(FixedTransform2D::ScalarType val)
 {
     return (val > 1.f) ? 1.f : (val < 0.f) ? 0.f : val;
 }
 
-static inline void pushVector(DisplayList& displayList, const ShapeVector2& point, Intensity intensity)
+static inline void pushVector(DisplayList& displayList, const FixedTransform2D::Vector2Type& point, Intensity intensity)
 {
     DisplayListVector2 displayPoint(saturate(point.x), saturate(point.y));
     displayList.PushVector(displayPoint, intensity);
@@ -35,16 +35,16 @@ void PushShapeToDisplayList(DisplayList& displayList,
                             uint32_t numPoints,
                             Intensity intensity,
                             bool closed,
-                            const FloatTransform2D& transform,
+                            const FixedTransform2D& transform,
                             BurnLength burnLength)
 {
-    Vector2<float> point0;
+    FixedTransform2D::Vector2Type point0;
     transform.transformVector(point0, points[0]);
     pushVector(displayList, point0, Intensity(0.f));
     Intensity burnBoost = 0;
     for (uint i = 1; i < numPoints; ++i)
     {
-        Vector2<float> point;
+        FixedTransform2D::Vector2Type point;
         transform.transformVector(point, points[i]);
         if(burnLength != 0)
         {
@@ -108,7 +108,7 @@ void Fragment::Move()
 uint32_t FragmentShape(const ShapeVector2* points,
                        uint32_t numPoints,
                        bool closed,
-                       const FloatTransform2D& transform,
+                       const FixedTransform2D& transform,
                        Fragment* outFragments,
                        uint32_t outFragmentsCapacity)
 {
@@ -118,7 +118,7 @@ uint32_t FragmentShape(const ShapeVector2* points,
     }
     uint32_t numFragments = 0;
 
-    Vector2<float> fPoint;
+    FixedTransform2D::Vector2Type fPoint;
     transform.transformVector(fPoint, points[0]);
     DisplayListVector2 point0(saturate(fPoint.x), saturate(fPoint.y));
     DisplayListVector2 previousPoint = point0;

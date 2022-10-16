@@ -46,21 +46,25 @@ void Spiral::UpdateAndRender(DisplayList& displayList, float dt)
 
     PushShapeToDisplayList(displayList, points, kNumPoints, 1.f, true /*closed*/);
 
-    FloatTransform2D transform;
-    FloatVector2 centre(0.5f, 0.5f);
-    float s, c;
-    sincosf(phase, &s, &c);
+    FixedTransform2D transform;
+    FixedTransform2D::Vector2Type centre(0.5f, 0.5f);
+    SinTableValue s, c;
+    SinTable::SinCos(phase, s, c);
     transform.setAsRotation(s, c, centre);
+    // float s, c;
+    // sincosf(phase, &s, &c);
+    // transform.setAsRotation(s, c, centre);
     transform *= 0.35f;
-    FloatTransform2D localTransform;
+    FixedTransform2D localTransform;
     for (uint32_t i = 0; i < kCount; ++i)
     {
-        sincosf(phase - (float)i * 0.02f, &s, &c);
-        localTransform.setAsRotation(s, c, FloatVector2(0.f, 0.f));
+        SinTable::SinCos(phase - (float)i * 0.02f, s, c);
+        //sincosf(phase - (float)i * 0.02f, &s, &c);
+        localTransform.setAsRotation(s, c, FixedTransform2D::Vector2Type(0.f, 0.f));
         localTransform *= 0.35f;
         float scale = 1.f - ((float) i / kCount);
         localTransform *= scale;
-        localTransform.setTranslation(FloatVector2(0.5f, 0.5f));
+        localTransform.setTranslation(FixedTransform2D::Vector2Type(0.5f, 0.5f));
         intensity = 0.75f;//1.f - ((float) i / kCount);
         if(i == brightIdx)
         {

@@ -7,11 +7,12 @@
 #include "pico/float.h"
 
 
-template <typename ScalarType = float>
+template <typename T = float>
 struct Transform2D
 {
-    ScalarType m[3][2];
+    typedef T ScalarType;
     typedef Vector2<ScalarType> Vector2Type;
+    ScalarType m[3][2];
 
     void setAsIdentity()
     {
@@ -72,7 +73,7 @@ struct Transform2D
         return *this;
     }
 
-    Transform2D& operator*=(float scale)
+    Transform2D& operator*=(ScalarType scale)
     {
         m[0][0] *= scale;
         m[0][1] *= scale;

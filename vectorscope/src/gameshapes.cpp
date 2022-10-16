@@ -111,7 +111,7 @@ static const int8_t s_gameShapeOffsets[][2] =
 };
 
 
-void PushGameShape(DisplayList& displayList, const FloatTransform2D& transform, GameShape shape, Intensity intensity)
+void PushGameShape(DisplayList& displayList, const FixedTransform2D& transform, GameShape shape, Intensity intensity)
 {
     const CompactVector* vector = s_gameShapeVectors + s_gameShapes[(int)shape][0];
     const CompactVector* end = vector + s_gameShapes[(int)shape][1];
@@ -143,7 +143,7 @@ void PushGameShape(DisplayList& displayList, const FloatTransform2D& transform, 
 }
 
 uint32_t FragmentGameShape(GameShape shape,
-                           const FloatTransform2D& transform,
+                           const FixedTransform2D& transform,
                            Fragment* outFragments,
                            uint32_t outFragmentsCapacity)
 {

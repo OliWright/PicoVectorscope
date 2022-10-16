@@ -307,7 +307,7 @@ static bool processChar(const uint8_t* chr, int32_t& x_offset, int32_t& y_offset
 }
 
 
-void TextPrint(DisplayList& displayList, const FloatTransform2D& transform, const char* message, Intensity intensity, BurnLength burnLength, bool centre)
+void TextPrint(DisplayList& displayList, const FixedTransform2D& transform, const char* message, Intensity intensity, BurnLength burnLength, bool centre)
 {
     constexpr uint32_t kMaxPoints = 8;
     ShapeVector2 points[kMaxPoints];
@@ -376,14 +376,14 @@ BurnLength CalcBurnLength(const char* message)
     return burnLength + 3;
 }
 
-void CalcTextTransform(const DisplayListVector2& pos, const DisplayListScalar& scale, FloatTransform2D& outTranform)
+void CalcTextTransform(const DisplayListVector2& pos, const DisplayListScalar& scale, FixedTransform2D& outTranform)
 {
-    outTranform.setAsScale((float) scale);
-    outTranform.setTranslation(FloatVector2((float) pos.x, (float) pos.y));
+    outTranform.setAsScale(scale);
+    outTranform.setTranslation(FixedTransform2D::Vector2Type(pos.x, pos.y));
 }
 
 uint32_t FragmentText(const char* message,
-                      const FloatTransform2D& transform,
+                      const FixedTransform2D& transform,
                       Fragment* outFragments,
                       uint32_t outFragmentsCapacity,
                       bool centre)

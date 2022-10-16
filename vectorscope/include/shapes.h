@@ -3,7 +3,7 @@
 #include "displaylist.h"
 #include "transform2d.h"
 
-typedef Vector2<float> ShapeVector2;
+typedef FixedTransform2D::Vector2Type ShapeVector2;
 
 typedef FixedPoint<8, int32_t, int32_t, false> BurnLength;
 
@@ -14,7 +14,7 @@ void PushShapeToDisplayList(DisplayList& displayList,
                             uint32_t numPoints,
                             Intensity intensity,
                             bool closed,
-                            const FloatTransform2D& transform,
+                            const FixedTransform2D& transform,
                             BurnLength burnLength = 0.f);
 
 struct Fragment
@@ -33,7 +33,7 @@ struct Fragment
 uint32_t FragmentShape(const ShapeVector2* points,
                        uint32_t numPoints,
                        bool closed,
-                       const FloatTransform2D& transform,
+                       const FixedTransform2D& transform,
                        Fragment* outFragments,
                        uint32_t outFragmentsCapacity);
 

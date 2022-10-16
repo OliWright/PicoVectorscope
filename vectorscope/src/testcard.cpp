@@ -16,9 +16,16 @@ static uint32_t s_numFragments = 0;
 
 void TestCard::Init()
 {
-    FloatTransform2D transform;
+    FixedTransform2D transform;
     transform.setAsScale(0.05f);
-    transform.setTranslation(FloatVector2(0.5f, 0.5f));
+
+    SinTableValue s, c;
+    //SinTable::SinCos(m_rotation, s, c);
+    SinTable::SinCos(0.f, s, c);
+    transform.setAsRotation(s, c);
+    transform *= 0.05f;
+
+    transform.setTranslation(FixedTransform2D::Vector2Type(0.5f, 0.5f));
 
     // PushGameShape(displayList, transform, GameShape::eShip, Intensity(2.f));
     s_numFragments = FragmentGameShape(GameShape::eAsteroid0, transform, s_fragments, kMaxFragments);
@@ -33,23 +40,23 @@ void TestCard::UpdateAndRender(DisplayList& displayList, float dt)
         phase -= kPi * 2.f;
     }
 
-    FloatTransform2D transform;
+    FixedTransform2D transform;
     FloatVector2 centre(0.5f, 0.5f);
 
     transform.setAsScale(0.05f);
-    transform.translate(FloatVector2(0.1f, 0.9f));
+    transform.translate(FixedTransform2D::Vector2Type(0.1f, 0.9f));
     constexpr uint32_t kCount = 2;
     for(uint32_t i = 0; i < kCount; ++i)
     {
         TextPrint(displayList, transform, "PICO VECTORSCOPE", Intensity(1.f - ((float) i / kCount)), 100);
-        transform.translate(FloatVector2(0.01f, 0.01f));
+        transform.translate(FixedTransform2D::Vector2Type(0.01f, 0.01f));
     }
 
     transform.setAsScale(0.018f);
 
     for(uint32_t i = 0; i < (uint32_t) GameShape::eCount; ++i)
     {
-        transform.setTranslation(FloatVector2(0.1f + (0.8f * i / (float) ((int)GameShape::eCount - 1)), 0.25f));
+        transform.setTranslation(FixedTransform2D::Vector2Type(0.1f + (0.8f * i / (float) ((int)GameShape::eCount - 1)), 0.25f));
         PushGameShape(displayList, transform, (GameShape) i, Intensity(1.f));
     }
 

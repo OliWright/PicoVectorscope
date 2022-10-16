@@ -16,9 +16,9 @@ enum class GameShape
 
     eCount
 };
-void PushGameShape(DisplayList& displayList, const FloatTransform2D& transform, GameShape shape, Intensity intensity);
+void PushGameShape(DisplayList& displayList, const FixedTransform2D& transform, GameShape shape, Intensity intensity);
 
 uint32_t FragmentGameShape(GameShape shape,
-                           const FloatTransform2D& transform,
+                           const FixedTransform2D& transform,
                            Fragment* outFragments,
                            uint32_t outFragmentsCapacity);

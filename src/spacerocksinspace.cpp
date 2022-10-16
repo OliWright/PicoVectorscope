@@ -30,7 +30,7 @@ static const char* s_title = "SPACE ROCKS\nIN\nSPACE";
 static const BurnLength s_titleTotalBurnLength = CalcBurnLength(s_title);
 static const char* s_gameOver = "GAME\nOVER";
 static const BurnLength s_gameOverTotalBurnLength = CalcBurnLength(s_gameOver);
-static FloatTransform2D s_titleTextTransform;
+static FixedTransform2D s_titleTextTransform;
 
 static uint32_t s_frameCounter = 0;
 
@@ -117,7 +117,7 @@ struct Fragments
         PushFragmentsToDisplayList(displayList, s_fragments, s_numFragments);
     }
 
-    static void Add(GameShape shape, const DisplayListVector2& baseSpeed, const FloatTransform2D& transform, Intensity intensity)
+    static void Add(GameShape shape, const DisplayListVector2& baseSpeed, const FixedTransform2D& transform, Intensity intensity)
     {
         uint numNewFragments = FragmentGameShape(shape, transform, s_fragments + s_numFragments, kMaxFragments - s_numFragments);
         for(uint i = 0; i < numNewFragments; ++i)
@@ -131,7 +131,7 @@ struct Fragments
         s_numFragments += numNewFragments;
     }
 
-    static void Add(const char* message, const FloatTransform2D& transform)
+    static void Add(const char* message, const FixedTransform2D& transform)
     {
         uint numNewFragments = FragmentText(message, transform, s_fragments + s_numFragments, kMaxFragments - s_numFragments, true);
         for(uint i = 0; i < numNewFragments; ++i)
@@ -193,14 +193,18 @@ struct ShapeObject : public BaseObject
         }
     }
 
-    void CalcTransform(FloatTransform2D& outTransform)
+    void CalcTransform(FixedTransform2D& outTransform)
     {
-        float s, c;
-        sincosf(m_rotation, &s, &c);
+        SinTableValue s, c;
+        SinTable::SinCos(m_rotation, s, c);
+        //SinTable::SinCos(0.f, s, c);
+        outTransform.setAsRotation(s, c);
 
-        outTransform.setAsRotation(s, c, FloatVector2(0.f, 0.f));
+        //float s, c;
+        //sincosf(m_rotation, &s, &c);
+        //outTransform.setAsRotation(s, c, FixedTransform2D::Vector2Type(0.f, 0.f));
         outTransform *= m_scale;
-        outTransform.setTranslation(FloatVector2((float) m_position.x, (float) m_position.y));
+        outTransform.setTranslation(FixedTransform2D::Vector2Type(m_position.x, m_position.y));
     }
 
     void UpdateAndDraw(DisplayList& displayList)
@@ -212,7 +216,7 @@ struct ShapeObject : public BaseObject
 
         Move();
 
-        FloatTransform2D transform;
+        FixedTransform2D transform;
         CalcTransform(transform);
         PushGameShape(displayList, transform, m_shape, m_brightness);
     }
@@ -481,7 +485,7 @@ struct Asteroid : public ShapeObject
         if(m_numHitsToDestroy <= 0)
         {
             // Break the asteroid apart
-            FloatTransform2D transform;
+            FixedTransform2D transform;
             CalcTransform(transform);
             Fragments::Add(m_shape, m_velocity, transform, 1.f);
             Destroy();
@@ -599,7 +603,7 @@ struct PlayerShip : public ShapeObject
                 particleVelocity.y = (asteroid.m_velocity.y + m_velocity.y) * 0.5f;
                 Particle::Emit(m_position, particleVelocity, 1.f, 8);
 
-                FloatTransform2D transform;
+                FixedTransform2D transform;
                 CalcTransform(transform);
                 Fragments::Add(m_shape, m_velocity, transform, 4.f);
 
@@ -607,7 +611,7 @@ struct PlayerShip : public ShapeObject
             }
         }
 
-        FloatTransform2D transform;
+        FixedTransform2D transform;
         CalcTransform(transform);
         PushGameShape(displayList, transform, m_shape, m_brightness);
         if(thrust)
