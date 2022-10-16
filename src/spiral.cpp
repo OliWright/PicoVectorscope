@@ -11,9 +11,10 @@ static const uint32_t kNumPoints = sizeof(points) / sizeof(points[0]);
 class Spiral : public Demo
 {
 public:
+    Spiral(int order) : Demo(order) {}
     void UpdateAndRender(DisplayList& displayList, float dt);
 };
-static Spiral s_spiral;
+static Spiral s_spiral(0);
 
 void Spiral::UpdateAndRender(DisplayList& displayList, float dt)
 {

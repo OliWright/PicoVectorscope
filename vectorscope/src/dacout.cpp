@@ -98,24 +98,27 @@ void DacOutput::Flush(bool finalFlushForFrame)
 
     critical_section_enter_blocking(&s_dmaCriticalSection);
         dmaChannel.Enable(s_currentEntryIdx);
-        if(s_currentPioConfig == s_previousPioConfig)
-        {
-            // Enable chaining on the previous DMA channel so that if it's still running,
-            // it will chain to this one automatically
-            LOG_INFO(DacOutputSynchronisation, "Chain [%d, %d]\n", (s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers, s_currentBufferIdx);
-            s_dmaChannels[(s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers].EnableChaining();
-        }
-        else
-        {
-            // We can't chain it, because it requires a change in PIO SM program
-            dmaChannel.m_pDacOutputPioSmConfigToSet = s_currentPioConfig;
-            s_previousPioConfig = s_currentPioConfig;
-        }
-
         if(++s_numDmaChannelsQueued == 1)
         {
             LOG_INFO(DacOutputSynchronisation, "Flush Kick %d\n", s_currentBufferIdx);
             configureAndStartDma(*s_currentPioConfig, dmaChannel);
+        }
+        else
+        {
+            if(s_currentPioConfig == s_previousPioConfig)
+            {
+                // Enable chaining on the previous DMA channel so that if it's still running,
+                // it will chain to this one automatically
+                LOG_INFO(DacOutputSynchronisation, "Chain [%d, %d]\n", (s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers, s_currentBufferIdx);
+                //s_dmaChannels[(s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers].EnableChaining();
+            }
+            else
+            {
+                // We can't chain it, because it requires a change in PIO SM program
+                dmaChannel.m_pDacOutputPioSmConfigToSet = s_currentPioConfig;
+                s_previousPioConfig = s_currentPioConfig;
+            }
+
         }
     critical_section_exit(&s_dmaCriticalSection);
 
@@ -196,10 +199,11 @@ void DacOutput::dmaIrqHandler()
         DmaChannel& nextDmaChannel = s_dmaChannels[s_nextBufferIrq];
         // We need to configure the PIO, and kick off
         // this DMA channel right here.
-        if(nextDmaChannel.m_pDacOutputPioSmConfigToSet != nullptr)
+        
+        //if(nextDmaChannel.m_pDacOutputPioSmConfigToSet != nullptr)
         {
             LOG_INFO(DacOutputSynchronisation, "IRQ Kick %d\n", s_nextBufferIrq);
-            configureAndStartDma(*nextDmaChannel.m_pDacOutputPioSmConfigToSet, nextDmaChannel);
+            configureAndStartDma(nextDmaChannel.m_pDacOutputPioSmConfigToSet ? *nextDmaChannel.m_pDacOutputPioSmConfigToSet : *s_activePioSmConfig, nextDmaChannel);
             makeIdle = false;
         }
     }

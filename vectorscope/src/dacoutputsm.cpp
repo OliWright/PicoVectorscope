@@ -19,7 +19,7 @@ struct ProgramInfo
 };
 static const ProgramInfo s_programInfo[] = {
     {&idle_program,   idle_wrap_target,   idle_wrap,   pio0, 2, 32},
-    {&vector_program, vector_wrap_target, vector_wrap, pio0, 3, 2},
+    {&vector_program, vector_wrap_target, vector_wrap, pio0, 3, 3},
     {&points_program, points_wrap_target, points_wrap, pio0, 2, 32},
 };
 
