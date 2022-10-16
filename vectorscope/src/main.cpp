@@ -21,11 +21,11 @@ mutex_t displayListMutex[2];
 static uint32_t outputDisplayListIdx = 0;
 static uint32_t displayListIdx = 1;
 static volatile bool dacOutputRunning = false;
-static constexpr uint64_t kNumMicrosBetweenFrames = 16667; // 60FPS
-//static constexpr uint64_t kNumMicrosBetweenFrames = 10000; // 100FPS
+static constexpr uint64_t kNumMicrosBetweenFrames = 1000000 / 120; // FPS
 static constexpr uint32_t kGeneralPurposeButtonPin = 20;
 static uint32_t coolDemoIdx = 0;
 static bool singleStepMode = false;
+static const float kDt = (float) kNumMicrosBetweenFrames / 1000000.f;
 
 static LogChannel FrameSynchronisation(false);
 static LogChannel Events(true);
@@ -149,7 +149,7 @@ void displayListUpdateLoop()
 
     Buttons::Update();
 
-    s_demos[coolDemoIdx]->UpdateAndRender(displayList, 0.0167f);
+    s_demos[coolDemoIdx]->UpdateAndRender(displayList, kDt);
 
     // Unlock it so that the display output knows it's ready
     LOG_INFO(FrameSynchronisation, "Fill E: %d\n", displayListIdx);

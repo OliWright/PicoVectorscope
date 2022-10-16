@@ -4,27 +4,38 @@
 // Constants
 //
 
-static constexpr DisplayListScalar kBulletSpeed(0.01f);
-static constexpr uint32_t kBulletLife = 60;
-static constexpr DisplayListScalar kGlobalScale(0.015f);
-static constexpr float kGlobalScaleFloat = (float) kGlobalScale;
-static constexpr DisplayListScalar kParticleSpeed(0.01f);
-static constexpr DisplayListScalar kFragmentSpeed(0.002f);
-static constexpr float kPlayerShipRotationSpeed = 0.1f;
-static constexpr DisplayListScalar kThrust = 0.0003f;
-static constexpr DisplayListScalar kDrag = 0.99f;
-static constexpr float kAsteroidMaxRotationSpeed = 0.03f;
-static constexpr float kAsteroidCollisionRadius = 2.7f;
+typedef FixedPoint<20,int32_t,int32_t> GameScalar;
+typedef Vector2<GameScalar> GameVector2;
+
+static constexpr float kGlobalScaleFloat = 0.015f;
+static constexpr float kGlobalSpeedFloat = 0.5f;
+
+
+static constexpr GameScalar kGlobalScale = kGlobalScaleFloat;
+static constexpr GameScalar kGlobalSpeed = kGlobalSpeedFloat;
+static constexpr GameScalar kRecipGlobalSpeed = 1.f / kGlobalSpeedFloat;
+static constexpr GameScalar kBulletSpeed = kGlobalSpeedFloat * 0.01f;
+static constexpr uint32_t kBulletLife = (uint) (kRecipGlobalSpeed * 60);
+static constexpr GameScalar kParticleSpeed = kGlobalSpeedFloat * 0.004f;
+static constexpr GameScalar kFragmentSpeed = kGlobalSpeedFloat * 0.002f;
+static constexpr GameScalar kFragmentRotationSpeed = kGlobalSpeedFloat * 0.05f;
+static constexpr GameScalar kTextFragmentRotationSpeed = kGlobalSpeedFloat * 0.02f;
+static constexpr GameScalar kPlayerShipRotationSpeed = kGlobalSpeedFloat * 0.1f;
+static constexpr GameScalar kThrust = kGlobalSpeedFloat * 0.0003f;
+static constexpr GameScalar kDrag = kGlobalSpeedFloat * 0.99f;
+static constexpr float kAsteroidSpeedScaleFloat = kGlobalSpeedFloat * 2.f;
+static constexpr GameScalar kAsteroidMaxRotationSpeed = kGlobalSpeedFloat * 0.03f;
+static constexpr float kAsteroidCollisionRadiusFloat = kGlobalScaleFloat * 2.7f;
 static constexpr float kBulletMass = 0.1f;
 static constexpr uint kMaxBullets = 4;
 static constexpr uint kMaxParticles = 128;
-static constexpr uint kParticleLife = 30;
+static constexpr uint kParticleLife = (uint) (kRecipGlobalSpeed * 10);
 static constexpr uint kMaxAsteroids = 32;
 static constexpr uint kNumLives = 3;
-static constexpr DisplayListScalar kPlayerShipScale(kGlobalScale);
-static constexpr DisplayListScalar kBulletLaunchOffset(kPlayerShipScale * 3.3f);
-static constexpr DisplayListScalar kSafeRadius(kGlobalScale * 10.f);
-static constexpr Intensity kRecipParticleLife = Intensity(1.f) / Intensity(kParticleLife);
+static constexpr GameScalar kPlayerShipScale = kGlobalScale;
+static constexpr GameScalar kBulletLaunchOffset = Mul(kPlayerShipScale, GameScalar(3.3f), 6, 4);
+static constexpr GameScalar kSafeRadius = Mul(kGlobalScale, GameScalar(10.f), 6, 4);
+static constexpr Intensity kRecipParticleLife = Intensity(kParticleLife).recip();
 
 static const char* s_title = "SPACE ROCKS\nIN\nSPACE";
 static const BurnLength s_titleTotalBurnLength = CalcBurnLength(s_title);
@@ -34,50 +45,67 @@ static FixedTransform2D s_titleTextTransform;
 
 static uint32_t s_frameCounter = 0;
 
+static constexpr SinTableValue kSin1 = -1.f;
+static constexpr GameScalar kGame1 = kSin1;
+static constexpr int32_t kShiftTest = SignedShift(2, 1);
+
+static constexpr float kCastTest = (float) GameScalar(kSin1);
+static constexpr GameScalar kThrustTest = Mul(GameScalar(SinTableValue(0.1f)), kThrust, 6);
+static constexpr GameScalar kThrustTest2 = Mul(GameScalar(SinTableValue(-1.f)), kThrust, 6);
+
+static LogChannel SpaceRocks(true);
+
 //
 // Some helper functions
 //
 
-static void normalize(DisplayListVector2& vec)
+static void normalize(GameVector2& vec)
 {
-    DisplayListScalar::MathsIntermediateType length = ((vec.x * vec.x) + (vec.y * vec.y)).sqrt();
-    DisplayListScalar::MathsIntermediateType recipLength = DisplayListScalar(1.f) / length;
+    GameScalar::MathsIntermediateType length = (Mul(vec.x, vec.x, 6, 6) + Mul(vec.y, vec.y, 6, 6)).sqrt();
+    //GameScalar::MathsIntermediateType length = ((vec.x * vec.x) + (vec.y * vec.y)).sqrt();
+    GameScalar::MathsIntermediateType recipLength = length.recip();
 
-    vec.x *= recipLength;
-    vec.y *= recipLength;
+    vec.x = Mul(vec.x, recipLength, 6, 10);
+    vec.y = Mul(vec.y, recipLength, 6, 10);
 }
 
-static void initVecRand0to1(DisplayListVector2& vec)
+static void initVecRand0to1(GameVector2& vec)
 {
-    vec.x = DisplayListScalar::randZeroToOne();
-    vec.y = DisplayListScalar::randZeroToOne();
+    vec.x = GameScalar::randZeroToOne();
+    vec.y = GameScalar::randZeroToOne();
 }
 
-static void applyDrag(DisplayListScalar& val, const DisplayListScalar& drag)
+static void initVecRandMinus1to1(GameVector2& vec)
+{
+    vec.x = GameScalar::randMinusOneToOne();
+    vec.y = GameScalar::randMinusOneToOne();
+}
+
+static void applyDrag(GameScalar& val, const GameScalar& drag)
 {
     // If we just multiply by drag, then -ve numbers will never get to zero
     // because of fixed point things.
-    if(val < DisplayListScalar(0))
+    if(val < 0)
     {
-        val = DisplayListScalar(0) - ((DisplayListScalar(0) - val) * drag); // TODO: unary - operator
+        val = -Mul(-val, drag, 6, 6);
     }
     else
     {
-        val *= drag;
+        val = Mul(val, drag, 6, 6);
     }
 }
 
-static void applyDrag(DisplayListVector2& vec, const DisplayListScalar& drag)
+static void applyDrag(GameVector2& vec, const GameScalar& drag)
 {
     applyDrag(vec.x, drag);
     applyDrag(vec.y, drag);
 }
 
-static bool testCollisionOctagon(const DisplayListVector2& p0, const DisplayListVector2& p1, DisplayListScalar distance)
+static bool testCollisionOctagon(const GameVector2& p0, const GameVector2& p1, GameScalar distance)
 {
     // Octagon collision
-    DisplayListScalar dx = (p1.x - p0.x).abs();
-    DisplayListScalar dy = (p1.y - p0.y).abs();
+    GameScalar dx = (p1.x - p0.x).abs();
+    GameScalar dy = (p1.y - p0.y).abs();
     return (dx < distance) && (dy < distance) && ((dx + dy) < distance);
 }
 
@@ -101,7 +129,7 @@ struct Fragments
         for(uint i = 0; i < s_numFragments; ++i)
         {
             Fragment& fragment = s_fragments[i];
-            fragment.m_intensity -= 0.01f;
+            fragment.m_intensity -= GameScalar(kGlobalSpeedFloat * 0.01f);
             if(fragment.m_intensity < 0)
             {
                 // Fragment is dead
@@ -117,16 +145,16 @@ struct Fragments
         PushFragmentsToDisplayList(displayList, s_fragments, s_numFragments);
     }
 
-    static void Add(GameShape shape, const DisplayListVector2& baseSpeed, const FixedTransform2D& transform, Intensity intensity)
+    static void Add(GameShape shape, const GameVector2& baseSpeed, const FixedTransform2D& transform, Intensity intensity)
     {
         uint numNewFragments = FragmentGameShape(shape, transform, s_fragments + s_numFragments, kMaxFragments - s_numFragments);
         for(uint i = 0; i < numNewFragments; ++i)
         {
             Fragment& fragment = s_fragments[s_numFragments + i];
-            fragment.m_velocity.x = baseSpeed.x + (kFragmentSpeed * DisplayListScalar::randMinusOneToOne());
-            fragment.m_velocity.y = baseSpeed.y + (kFragmentSpeed * DisplayListScalar::randMinusOneToOne());
+            fragment.m_velocity.x = baseSpeed.x + Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6);
+            fragment.m_velocity.y = baseSpeed.y + Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6);
             fragment.m_intensity = intensity;
-            fragment.m_rotationSpeed = DisplayListScalar::randMinusOneToOne() * 0.05f;
+            fragment.m_rotationSpeed = Mul(GameScalar::randMinusOneToOne(), kFragmentRotationSpeed, 6);
         }
         s_numFragments += numNewFragments;
     }
@@ -137,10 +165,10 @@ struct Fragments
         for(uint i = 0; i < numNewFragments; ++i)
         {
             Fragment& fragment = s_fragments[s_numFragments + i];
-            fragment.m_velocity.x = (kFragmentSpeed * DisplayListScalar::randMinusOneToOne()) * 0.5f;
-            fragment.m_velocity.y = (kFragmentSpeed * DisplayListScalar::randMinusOneToOne()) * 0.5f;
+            fragment.m_velocity.x = Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6) * 0.5f;
+            fragment.m_velocity.y = Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6) * 0.5f;
             fragment.m_intensity = 2.f;
-            fragment.m_rotationSpeed = DisplayListScalar::randMinusOneToOne() * 0.02f;
+            fragment.m_rotationSpeed = Mul(GameScalar::randMinusOneToOne(), kTextFragmentRotationSpeed, 6);
         }
         s_numFragments += numNewFragments;
     }
@@ -156,8 +184,8 @@ uint Fragments::s_numFragments = 0;
 // This is classic OOP.
 struct BaseObject
 {
-    DisplayListVector2 m_position;
-    DisplayListVector2 m_velocity;
+    GameVector2 m_position;
+    GameVector2 m_velocity;
     Intensity m_brightness;
     bool m_active;
 
@@ -174,22 +202,22 @@ struct BaseObject
 struct ShapeObject : public BaseObject
 {
     GameShape m_shape;
-    float m_rotation;
-    float m_scale;
+    GameScalar m_rotation;
+    GameScalar m_scale;
 
     ShapeObject() : BaseObject() {}
 
-    void Rotate(float angle)
+    void Rotate(GameScalar angle)
     {
         m_rotation += angle;
 
-        if (m_rotation > (kPi * 2.f))
+        if (m_rotation > GameScalar(kPi * 2.f))
         {
-            m_rotation -= kPi * 2.f;
+            m_rotation -= GameScalar(kPi * 2.f);
         }
-        if (m_rotation < 0.f)
+        if (m_rotation < 0)
         {
-            m_rotation += kPi * 2.f;
+            m_rotation += GameScalar(kPi * 2.f);
         }
     }
 
@@ -197,13 +225,9 @@ struct ShapeObject : public BaseObject
     {
         SinTableValue s, c;
         SinTable::SinCos(m_rotation, s, c);
-        //SinTable::SinCos(0.f, s, c);
         outTransform.setAsRotation(s, c);
 
-        //float s, c;
-        //sincosf(m_rotation, &s, &c);
-        //outTransform.setAsRotation(s, c, FixedTransform2D::Vector2Type(0.f, 0.f));
-        outTransform *= m_scale;
+        outTransform *= FixedTransform2D::ScalarType(m_scale);
         outTransform.setTranslation(FixedTransform2D::Vector2Type(m_position.x, m_position.y));
     }
 
@@ -247,13 +271,13 @@ struct Bullet : public BaseObject
         displayList.PushPoint(m_position.x, m_position.y, m_brightness);
     }
 
-    void Fire(const DisplayListVector2& position, const DisplayListVector2& direction)
+    void Fire(const GameVector2& position, const GameVector2& direction)
     {
-        m_position.x = position.x + (direction.x * kBulletLaunchOffset);
-        m_position.y = position.y + (direction.y * kBulletLaunchOffset);
+        m_position.x = position.x + Mul(direction.x, kBulletLaunchOffset, 6, 4);
+        m_position.y = position.y + Mul(direction.y, kBulletLaunchOffset, 6, 4);
         m_brightness = Intensity(1.f);
-        m_velocity.x = direction.x * kBulletSpeed;
-        m_velocity.y = direction.y * kBulletSpeed;
+        m_velocity.x = Mul(direction.x, kBulletSpeed, 6, 3);
+        m_velocity.y = Mul(direction.y, kBulletSpeed, 6, 3);
         m_launchFrame = s_frameCounter;
         m_active = true;
     }
@@ -286,7 +310,7 @@ Bullet Bullet::s_bullets[kMaxBullets] = {};
 // Particles are similar to bullets, but fade out
 struct Particle : public BaseObject
 {
-    static void Emit(const DisplayListVector2& position, const DisplayListVector2& baseSpeed, Intensity brightness, uint count)
+    static void Emit(const GameVector2& position, const GameVector2& baseSpeed, Intensity brightness, uint count)
     {
         Intensity brightnessStep = brightness * kRecipParticleLife;
         for(uint i = 0; i < count; ++i)
@@ -300,8 +324,8 @@ struct Particle : public BaseObject
             particle.m_position.y = position.y;
             particle.m_brightness = brightness;
             particle.m_brightnessStep = brightnessStep;
-            particle.m_velocity.x = baseSpeed.x + (kParticleSpeed * DisplayListScalar::randMinusOneToOne());
-            particle.m_velocity.y = baseSpeed.y + (kParticleSpeed * DisplayListScalar::randMinusOneToOne());
+            particle.m_velocity.x = baseSpeed.x + Mul(GameScalar::randMinusOneToOne(), kParticleSpeed, 7, 1);
+            particle.m_velocity.y = baseSpeed.y + Mul(GameScalar::randMinusOneToOne(), kParticleSpeed, 7, 1);
             particle.m_active = true;
         }
     }
@@ -365,17 +389,17 @@ struct Asteroid : public ShapeObject
 
     struct SizeInfo
     {
-        DisplayListScalar m_speedScale;
-        DisplayListScalar m_speedBias;
-        DisplayListScalar m_collisionRadius;
-        DisplayListScalar m_bulletMassOverAsteroidMass;
-        int16_t           m_numHitsToDestroy;
-        float m_scale;
+        GameScalar m_speedScale;
+        GameScalar m_speedBias;
+        GameScalar m_collisionRadius;
+        GameScalar m_bulletMassOverAsteroidMass;
+        GameScalar m_scale;
+        int16_t    m_numHitsToDestroy;
     };
 
-    Size    m_size;
-    float   m_rotationSpeed;
-    int16_t m_numHitsToDestroy;
+    Size       m_size;
+    GameScalar m_rotationSpeed;
+    int16_t    m_numHitsToDestroy;
 
     static uint16_t s_numActive;
     static Asteroid s_asteroids[kMaxAsteroids];
@@ -412,11 +436,9 @@ struct Asteroid : public ShapeObject
     {
         m_size = size;
         const SizeInfo& sizeInfo = s_sizeInfo[(int) size];
-        initVecRand0to1(m_velocity);
-        m_velocity.x = (m_velocity.x * DisplayListScalar(2.f)) - DisplayListScalar(1.f);
-        m_velocity.y = (m_velocity.y * DisplayListScalar(2.f)) - DisplayListScalar(1.f);
+        initVecRandMinus1to1(m_velocity);
         normalize(m_velocity);
-        DisplayListScalar::MathsIntermediateType speed = (DisplayListScalar::randZeroToOne() * sizeInfo.m_speedScale) + sizeInfo.m_speedBias;
+        GameScalar speed = Mul(GameScalar::randZeroToOne(), sizeInfo.m_speedScale, 6) + sizeInfo.m_speedBias;
         speed = sizeInfo.m_speedBias;
         m_velocity.x *= speed;
         m_velocity.y *= speed;
@@ -434,12 +456,10 @@ struct Asteroid : public ShapeObject
     void Reset()
     {
         Destroy();
-
-        uint32_t rand = SimpleRand();
-        m_rotationSpeed = (float) (rand & 0xffff) * (kAsteroidMaxRotationSpeed * 2.f / 65535.f) - kAsteroidMaxRotationSpeed;
+        m_rotationSpeed = kAsteroidMaxRotationSpeed * GameScalar::randMinusOneToOne();
     }
 
-    DisplayListScalar GetCollisionRadius() const
+    GameScalar GetCollisionRadius() const
     {
         const SizeInfo& sizeInfo = s_sizeInfo[(int)m_size];
         return sizeInfo.m_collisionRadius;
@@ -454,8 +474,8 @@ struct Asteroid : public ShapeObject
 
         // Check for collision with a bullet
         const SizeInfo& sizeInfo = s_sizeInfo[(int)m_size];
-        const DisplayListScalar collisionRadius = sizeInfo.m_collisionRadius;
-        DisplayListVector velocityContribution;
+        const GameScalar collisionRadius = sizeInfo.m_collisionRadius;
+        GameVector2 velocityContribution;
         for(uint i = 0; i < kMaxBullets; ++i)
         {
             Bullet& bullet = Bullet::Get(i);
@@ -463,20 +483,20 @@ struct Asteroid : public ShapeObject
             {
                 if(testCollisionOctagon(m_position, bullet.m_position, collisionRadius))
                 {
-                    velocityContribution.x = bullet.m_velocity.x * sizeInfo.m_bulletMassOverAsteroidMass;
-                    velocityContribution.y = bullet.m_velocity.y * sizeInfo.m_bulletMassOverAsteroidMass;
+                    GameVector2 particleVelocity;
+                    particleVelocity.x = (bullet.m_velocity.x + m_velocity.x) >> 1;
+                    particleVelocity.y = (bullet.m_velocity.y + m_velocity.y) >> 1;
+
+                    Particle::Emit(bullet.m_position, particleVelocity, 0.2f, 5);
+                    
+                    velocityContribution.x = Mul(bullet.m_velocity.x, sizeInfo.m_bulletMassOverAsteroidMass, 6, 4);
+                    velocityContribution.y = Mul(bullet.m_velocity.y, sizeInfo.m_bulletMassOverAsteroidMass, 6, 4);
                     m_velocity.x += velocityContribution.x;
                     m_velocity.y += velocityContribution.y;
                     velocityContribution.x = m_velocity.x;
                     velocityContribution.y = m_velocity.y;
                     bullet.Kill();
                     --m_numHitsToDestroy;
-
-                    DisplayListVector2 particleVelocity;
-                    particleVelocity.x = (bullet.m_velocity.x + m_velocity.x) * 0.5f;
-                    particleVelocity.y = (bullet.m_velocity.y + m_velocity.y) * 0.5f;
-
-                    Particle::Emit(bullet.m_position, particleVelocity, 0.2f, 5);
                     break;
                 }
             }
@@ -541,18 +561,18 @@ struct Asteroid : public ShapeObject
 
 // Intialise the Asteroid::SizeInfo table
 #define ASTEROID_SIZE_INFO(minSpeed, maxSpeed, scale, mass, numHitsToDestroy) { \
-    DisplayListScalar(kGlobalScaleFloat * (maxSpeed - minSpeed)), \
-    DisplayListScalar(kGlobalScaleFloat * minSpeed), \
-    DisplayListScalar(kGlobalScale * kAsteroidCollisionRadius * scale), \
-    DisplayListScalar(kBulletMass) / DisplayListScalar(mass), \
-    numHitsToDestroy, \
-    (float) kGlobalScale * scale } \
+    kAsteroidSpeedScaleFloat * kGlobalScaleFloat * (maxSpeed - minSpeed), \
+    kAsteroidSpeedScaleFloat * kGlobalScaleFloat * minSpeed, \
+    kAsteroidCollisionRadiusFloat * scale, \
+    kBulletMass / mass, \
+    kGlobalScaleFloat * scale, \
+    numHitsToDestroy }
 
-const Asteroid::SizeInfo Asteroid::s_sizeInfo[] = 
+constexpr Asteroid::SizeInfo Asteroid::s_sizeInfo[] = 
 {
-    ASTEROID_SIZE_INFO(0.4f, 0.6f,  0.75f, 0.25f, 1), // eSmall
-    ASTEROID_SIZE_INFO(0.2f, 0.3f,  1.5f,  0.5f,  2), // eMedium
-    ASTEROID_SIZE_INFO(0.1f, 0.15f, 3.f,   1.f,   4), // eLarge
+    ASTEROID_SIZE_INFO(0.2f,  0.3f,   0.75f, 0.25f, 1), // eSmall
+    ASTEROID_SIZE_INFO(0.1f,  0.15f,  1.5f,  0.5f,  2), // eMedium
+    ASTEROID_SIZE_INFO(0.05f, 0.075f, 3.f,   1.f,   4), // eLarge
 };
 static_assert(count_of(Asteroid::s_sizeInfo) == (int) Asteroid::Size::Count, "");
 
@@ -573,8 +593,8 @@ struct PlayerShip : public ShapeObject
 
     void Reset()
     {
-        m_position = DisplayListVector2(0.5f, 0.5f);
-        m_velocity = DisplayListVector2(0.f, 0.f);
+        m_position = GameVector2(0.5f, 0.5f);
+        m_velocity = GameVector2(0.f, 0.f);
         m_rotation = 0.f;
         m_active = true;
     }
@@ -589,16 +609,16 @@ struct PlayerShip : public ShapeObject
         Move();
 
         // Check for collision with asteroids
-        constexpr DisplayListScalar kShipCollisionRadius = kGlobalScale * 2.f;
+        constexpr GameScalar kShipCollisionRadius = kGlobalScaleFloat * 2.f;
         for(uint i = 0; i < kMaxAsteroids; ++i)
         {
             const Asteroid& asteroid = Asteroid::Get(i);
-            DisplayListScalar asteroidCollisionRadius = asteroid.GetCollisionRadius();
+            GameScalar asteroidCollisionRadius = asteroid.GetCollisionRadius();
             if(asteroid.m_active && testCollisionOctagon(asteroid.m_position, m_position, asteroidCollisionRadius + kShipCollisionRadius))
             {
                 // Boom
                 m_active = false;
-                DisplayListVector2 particleVelocity;
+                GameVector2 particleVelocity;
                 particleVelocity.x = (asteroid.m_velocity.x + m_velocity.x) * 0.5f;
                 particleVelocity.y = (asteroid.m_velocity.y + m_velocity.y) * 0.5f;
                 Particle::Emit(m_position, particleVelocity, 1.f, 8);
@@ -755,7 +775,7 @@ struct GameState
                 for(uint i = 0; i < kMaxAsteroids; ++i)
                 {
                     const Asteroid& asteroid = Asteroid::Get(i);
-                    if(asteroid.m_active && testCollisionOctagon(asteroid.m_position, DisplayListVector2(0.5f, 0.5f), kSafeRadius))
+                    if(asteroid.m_active && testCollisionOctagon(asteroid.m_position, GameVector2(0.5f, 0.5f), kSafeRadius))
                     {
                         allClear = false;
                         break;
@@ -832,6 +852,17 @@ constexpr BurnLength test = Mul(BurnLength(20.f), BurnLength(10.f));
 void SpaceRocksInSpace::Init()
 {
     CalcTextTransform(DisplayListVector2(0.5f, 0.7f), 0.08f, s_titleTextTransform);
+
+    for(uint i = 0; i < (int) Asteroid::Size::Count; ++i)
+    {
+        const Asteroid::SizeInfo& sizeInfo = Asteroid::s_sizeInfo[i];
+        LOG_INFO(SpaceRocks, "Size %d: %f, %f\n", i, (float)sizeInfo.m_speedBias, (float)(sizeInfo.m_speedScale + sizeInfo.m_speedBias));
+
+        LOG_INFO(SpaceRocks, "Rand: %f\n", (float) GameScalar::randMinusOneToOne());
+        LOG_INFO(SpaceRocks, "Rand: %f\n", (float) GameScalar::randMinusOneToOne());
+        LOG_INFO(SpaceRocks, "Rand: %f\n", (float) GameScalar::randMinusOneToOne());
+        LOG_INFO(SpaceRocks, "Rand: %f\n", (float) GameScalar::randMinusOneToOne());
+    }
 }
 
 void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
@@ -866,13 +897,15 @@ void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
         s_playerShip.Rotate(-kPlayerShipRotationSpeed);
     }
     
-    float s, c;
-    sincosf(s_playerShip.m_rotation, &s, &c);
+    SinTableValue s, c;
+    SinTable::SinCos(s_playerShip.m_rotation, s, c);
 
     bool thrust = Buttons::IsHeld(Buttons::Id::Thrust);
     if(thrust)
     {
-        DisplayListVector2 acceleration = DisplayListVector2(DisplayListScalar(c) * kThrust, DisplayListScalar(s) * kThrust);
+        GameVector2 acceleration;
+        acceleration.x = Mul(GameScalar(c), kThrust, 6);
+        acceleration.y = Mul(GameScalar(s), kThrust, 6);
         s_playerShip.m_velocity.x += acceleration.x;
         s_playerShip.m_velocity.y += acceleration.y;
     }
@@ -884,7 +917,7 @@ void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
         Bullet* pBullet = Bullet::FindInactive();
         if(pBullet)
         {
-            DisplayListVector2 dir(c, s);
+            GameVector2 dir(c, s);
             pBullet->Fire(s_playerShip.m_position, dir);
         }
     }

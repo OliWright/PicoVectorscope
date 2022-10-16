@@ -88,6 +88,11 @@ public:
         return MathsIntermediateFixedPoint(m_storage - rhs.m_storage);
     }
 
+    constexpr MathsIntermediateFixedPoint operator-() const
+    {
+        return MathsIntermediateFixedPoint(-m_storage);
+    }
+
     constexpr MathsIntermediateFixedPoint operator*(int rhs) const
     {
         return MathsIntermediateFixedPoint(((int)m_storage * rhs));
@@ -96,6 +101,11 @@ public:
     constexpr MathsIntermediateFixedPoint operator*(float rhs) const
     {
         return *this * fromFloat(rhs);
+    }
+
+    constexpr MathsIntermediateFixedPoint operator >>(int rhs) const
+    {
+        return MathsIntermediateFixedPoint(m_storage >> rhs);
     }
 
     constexpr MathsIntermediateFixedPoint operator*(const MathsIntermediateFixedPoint& rhs) const
@@ -386,7 +396,7 @@ public:
 
     static FixedPoint randMinusOneToOne()
     {
-        return FixedPoint((StorageType) (SimpleRand() & ((1 << (kNumFractionalBits + 1)) - 1))) - FixedPoint(1);
+        return FixedPoint((StorageType) (SimpleRand() & ((1 << (kNumFractionalBits + 1)) - 1))) - FixedPoint(1.f);
     }
 
 private:
@@ -415,14 +425,7 @@ private:
 
     constexpr StorageType storageFromOtherFormat(MathsIntermediateStorageType src, uint32_t srcNumFractionalBits)
     {
-        if(srcNumFractionalBits > kNumFractionalBits)
-        {
-            src >>= (srcNumFractionalBits - kNumFractionalBits);
-        }
-        else if(srcNumFractionalBits < kNumFractionalBits)
-        {
-            src <<= (kNumFractionalBits - srcNumFractionalBits);
-        }
+        src = SignedShift(src, (int) srcNumFractionalBits - (int) kNumFractionalBits);
         return clamp(MathsIntermediateType(src));
     }
     constexpr void storeFromOtherFormat(MathsIntermediateStorageType src, uint32_t srcNumFractionalBits)
