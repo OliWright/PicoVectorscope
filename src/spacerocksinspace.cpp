@@ -8,7 +8,7 @@ typedef FixedPoint<20,int32_t,int32_t> GameScalar;
 typedef Vector2<GameScalar> GameVector2;
 
 static constexpr float kGlobalScaleFloat = 0.015f;
-static constexpr float kGlobalSpeedFloat = 0.5f;
+static constexpr float kGlobalSpeedFloat = 1.f;
 
 
 static constexpr GameScalar kGlobalScale = kGlobalScaleFloat;
@@ -21,7 +21,7 @@ static constexpr GameScalar kFragmentSpeed = kGlobalSpeedFloat * 0.002f;
 static constexpr GameScalar kFragmentRotationSpeed = kGlobalSpeedFloat * 0.05f;
 static constexpr GameScalar kTextFragmentRotationSpeed = kGlobalSpeedFloat * 0.02f;
 static constexpr GameScalar kPlayerShipRotationSpeed = kGlobalSpeedFloat * 0.1f;
-static constexpr GameScalar kThrust = kGlobalSpeedFloat * 0.0003f;
+static constexpr GameScalar kThrust = kGlobalSpeedFloat * 0.0001f;
 static constexpr GameScalar kDrag = kGlobalSpeedFloat * 0.01f;
 static constexpr float kAsteroidSpeedScaleFloat = kGlobalSpeedFloat * 2.f;
 static constexpr GameScalar kAsteroidMaxRotationSpeed = kGlobalSpeedFloat * 0.03f;
@@ -61,9 +61,9 @@ static LogChannel SpaceRocks(true);
 
 static void normalize(GameVector2& vec)
 {
-    GameScalar::MathsIntermediateType length = (Mul(vec.x, vec.x, 6, 6) + Mul(vec.y, vec.y, 6, 6)).sqrt();
-    //GameScalar::MathsIntermediateType length = ((vec.x * vec.x) + (vec.y * vec.y)).sqrt();
-    GameScalar::MathsIntermediateType recipLength = length.recip();
+    GameScalar::IntermediateType length = (Mul(vec.x, vec.x, 6, 6) + Mul(vec.y, vec.y, 6, 6)).sqrt();
+    //GameScalar::IntermediateType length = ((vec.x * vec.x) + (vec.y * vec.y)).sqrt();
+    GameScalar::IntermediateType recipLength = length.recip();
 
     vec.x = Mul(vec.x, recipLength, 6, 10);
     vec.y = Mul(vec.y, recipLength, 6, 10);
@@ -151,7 +151,7 @@ struct Fragments
             Fragment& fragment = s_fragments[s_numFragments + i];
             fragment.m_velocity.x = baseSpeed.x + Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6);
             fragment.m_velocity.y = baseSpeed.y + Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6);
-            fragment.m_intensity = intensity;
+            fragment.m_intensity = intensity * (Intensity::randZeroToOne() + 0.5f);
             fragment.m_rotationSpeed = Mul(GameScalar::randMinusOneToOne(), kFragmentRotationSpeed, 6);
         }
         s_numFragments += numNewFragments;
@@ -165,7 +165,7 @@ struct Fragments
             Fragment& fragment = s_fragments[s_numFragments + i];
             fragment.m_velocity.x = Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6) * 0.5f;
             fragment.m_velocity.y = Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6) * 0.5f;
-            fragment.m_intensity = 2.f;
+            fragment.m_intensity = Intensity::randZeroToOne() + 0.5f;
             fragment.m_rotationSpeed = Mul(GameScalar::randMinusOneToOne(), kTextFragmentRotationSpeed, 6);
         }
         s_numFragments += numNewFragments;
@@ -473,7 +473,6 @@ struct Asteroid : public ShapeObject
         // Check for collision with a bullet
         const SizeInfo& sizeInfo = s_sizeInfo[(int)m_size];
         const GameScalar collisionRadius = sizeInfo.m_collisionRadius;
-        GameVector2 velocityContribution;
         for(uint i = 0; i < kMaxBullets; ++i)
         {
             Bullet& bullet = Bullet::Get(i);
@@ -486,15 +485,14 @@ struct Asteroid : public ShapeObject
                     particleVelocity.y = (bullet.m_velocity.y + m_velocity.y) >> 1;
 
                     Particle::Emit(bullet.m_position, particleVelocity, 0.2f, 5);
-                    
-                    velocityContribution.x = Mul(bullet.m_velocity.x, sizeInfo.m_bulletMassOverAsteroidMass, 6, 4);
-                    velocityContribution.y = Mul(bullet.m_velocity.y, sizeInfo.m_bulletMassOverAsteroidMass, 6, 4);
-                    m_velocity.x += velocityContribution.x;
-                    m_velocity.y += velocityContribution.y;
-                    velocityContribution.x = m_velocity.x;
-                    velocityContribution.y = m_velocity.y;
-                    bullet.Kill();
                     --m_numHitsToDestroy;
+                    
+                    if(m_numHitsToDestroy > 0)
+                    {
+                        m_velocity.x += Mul(bullet.m_velocity.x, sizeInfo.m_bulletMassOverAsteroidMass, 6, 4);
+                        m_velocity.y += Mul(bullet.m_velocity.y, sizeInfo.m_bulletMassOverAsteroidMass, 6, 4);
+                    }
+                    bullet.Kill();
                     break;
                 }
             }
@@ -505,7 +503,8 @@ struct Asteroid : public ShapeObject
             // Break the asteroid apart
             FixedTransform2D transform;
             CalcTransform(transform);
-            Fragments::Add(m_shape, m_velocity, transform, 1.f);
+            GameVector2 parentVelocity = m_velocity;
+            Fragments::Add(m_shape, parentVelocity, transform, 1.f);
             Destroy();
             if(m_size != Size::eSmall)
             {
@@ -517,8 +516,8 @@ struct Asteroid : public ShapeObject
                     {
                         newAsteroid->m_position = m_position;
                         newAsteroid->InitRandomExceptPosition(newSize);
-                        newAsteroid->m_velocity.x += velocityContribution.x;
-                        newAsteroid->m_velocity.y += velocityContribution.y;
+                        newAsteroid->m_velocity.x += parentVelocity.x;
+                        newAsteroid->m_velocity.y += parentVelocity.y;
                     }
                 }
             }

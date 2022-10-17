@@ -75,7 +75,7 @@ void Fragment::Init(const DisplayListVector2& a, const DisplayListVector2& b)
     m_normalisedLineDirection.y = b.y - a.y;
 
     m_length = ((m_normalisedLineDirection.x * m_normalisedLineDirection.x) + (m_normalisedLineDirection.y * m_normalisedLineDirection.y)).sqrt();
-    DisplayListScalar::MathsIntermediateType recipLength = m_length.recip();
+    DisplayListScalar::IntermediateType recipLength = m_length.recip();
     m_normalisedLineDirection.x *= recipLength;
     m_normalisedLineDirection.y *= recipLength;
 

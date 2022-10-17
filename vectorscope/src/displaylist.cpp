@@ -79,19 +79,19 @@ void DisplayList::PushVector(DisplayListScalar x, DisplayListScalar y, Intensity
     DisplayListVector& vector = m_pDisplayListVectors[m_numDisplayListVectors++];
     vector.x = (x * calibrationScale.x) + calibrationBias.x;
     vector.y = (y * calibrationScale.y) + calibrationBias.y;
-    DisplayListScalar::MathsIntermediateType dx = vector.x - previous.x;
-    DisplayListScalar::MathsIntermediateType dy = vector.y - previous.y;
+    DisplayListScalar::IntermediateType dx = vector.x - previous.x;
+    DisplayListScalar::IntermediateType dy = vector.y - previous.y;
     intensity = Mul(intensity, intensity);
 #if 1
     // Fixed point sqrt
-    Intensity::MathsIntermediateType length = ((dx * dx) + (dy * dy)).sqrt();
-    Intensity::MathsIntermediateType time = Mul(intensity, length);
+    Intensity::IntermediateType length = ((dx * dx) + (dy * dy)).sqrt();
+    Intensity::IntermediateType time = Mul(intensity, length);
     uint32_t numSteps = (time * SPEED_CONSTANT).getIntegerPart() + 1;
 #elif 1
     // Quake rsqrt
     float length2 = fix2float(((dx * dx) + (dy * dy)).getStorage(), DisplayListIntermediate::kNumFractionalBits);
-    Intensity::MathsIntermediateType recipLength = (Intensity::MathsIntermediateType::StorageType) float2fix(Q_rsqrt(length2), Intensity::MathsIntermediateType::kNumFractionalBits);
-    Intensity::MathsIntermediateType time = intensity / recipLength;
+    Intensity::IntermediateType recipLength = (Intensity::IntermediateType::StorageType) float2fix(Q_rsqrt(length2), Intensity::IntermediateType::kNumFractionalBits);
+    Intensity::IntermediateType time = intensity / recipLength;
     uint32_t numSteps = ((time * SPEED_CONSTANT).getIntegerPart() + 1);
 #else
     // Built in floating point sqrtf

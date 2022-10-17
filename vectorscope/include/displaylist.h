@@ -11,7 +11,7 @@
 #if USE_FIXED_POINT
 #    include "fixedpoint.h"
 typedef FixedPoint<14, int16_t, int32_t, false> DisplayListScalar;
-//typedef DisplayListScalar::MathsIntermediateType DisplayListIntermediate;
+//typedef DisplayListScalar::IntermediateType DisplayListIntermediate;
 typedef FixedPoint<26, int32_t, int32_t, false> DisplayListIntermediate;
 typedef FixedPoint<11, int32_t, int32_t, false> Intensity;
 #else

@@ -21,7 +21,7 @@ mutex_t displayListMutex[2];
 static uint32_t outputDisplayListIdx = 0;
 static uint32_t displayListIdx = 1;
 static volatile bool dacOutputRunning = false;
-static constexpr uint64_t kNumMicrosBetweenFrames = 1000000 / 120; // FPS
+static constexpr uint64_t kNumMicrosBetweenFrames = 1000000 / 60; // FPS
 static constexpr uint32_t kGeneralPurposeButtonPin = 20;
 static uint32_t coolDemoIdx = 0;
 static bool singleStepMode = false;

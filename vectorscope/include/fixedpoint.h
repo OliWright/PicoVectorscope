@@ -12,35 +12,42 @@ static constexpr inline T SignedShift(T val, int shift)
     return (shift < 0) ? (T)((uint32_t) val << -shift) : (val >> shift);
 }
 
-template <unsigned int numFractionalBits, typename TStorageType>
-class MathsIntermediateFixedPoint
+template <unsigned int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping = true>
+class FixedPoint
 {
 public:
     typedef TStorageType StorageType;
-    typedef MathsIntermediateFixedPoint<numFractionalBits, TStorageType> MathsIntermediateType;
-    typedef TStorageType MathsIntermediateStorageType;
+    typedef TIntermediateStorageType IntermediateStorageType;
+    using IntermediateType = FixedPoint<numFractionalBits, IntermediateStorageType, IntermediateStorageType, doClamping>;
 
     static constexpr unsigned int kNumFractionalBits = numFractionalBits;
     static constexpr unsigned int kNumWholeBits = (sizeof(StorageType) * 8) - kNumFractionalBits;
     static constexpr bool kIsSigned = ((StorageType)-1) < 0;
     static constexpr float kFractionalBitsMul = (float)(1 << kNumFractionalBits);
     static constexpr float kRecipFractionalBitsMul = 1.0f / kFractionalBitsMul;
-    static constexpr StorageType kFractionalBitsMask = (1 << numFractionalBits) - 1;
+    static constexpr IntermediateStorageType kFractionalBitsMask = (1 << numFractionalBits) - 1;
+    static constexpr StorageType kStorageMSB = (StorageType)((~0ull) << (kNumWholeBits + kNumFractionalBits - 1));
+    static constexpr StorageType kMinStorageType = kIsSigned ? kStorageMSB : (StorageType)0;
+    static constexpr StorageType kMaxStorageType = kIsSigned ? ~kStorageMSB : (StorageType)~0ull;
+    static constexpr IntermediateStorageType kMinIntermediateType = (IntermediateStorageType)kMinStorageType;
+    static constexpr IntermediateStorageType kMaxIntermediateType = (IntermediateStorageType)kMaxStorageType;
+    static constexpr float kMinFloat = ((float)kMinStorageType) * kRecipFractionalBitsMul;
+    static constexpr float kMaxFloat = ((float)kMaxStorageType) * kRecipFractionalBitsMul;
 
-    // MathsIntermediateFixedPoint() delete;
-    //constexpr MathsIntermediateFixedPoint(float val) : m_storage( floatToStorageType(val) ) {}
-    constexpr MathsIntermediateFixedPoint(StorageType val) : m_storage(val)
-    {
-    }
+    constexpr FixedPoint()
+    {}
 
-    static constexpr MathsIntermediateFixedPoint fromFloat(float val)
-    {
-        return MathsIntermediateFixedPoint(floatToStorageType(val));
-    }
+    // Construct from some other format
+    template<typename T>
+    constexpr FixedPoint(const T& rhs)
+     : m_storage(fromOtherFormat(rhs).getStorage())
+     {}
+
+    explicit constexpr FixedPoint(StorageType storage) : m_storage(storage) {}
 
     explicit constexpr operator float() const
     {
-        return storageTypeToFloat(m_storage);
+        return toFloat();
     }
 
     explicit constexpr operator int() const
@@ -53,118 +60,121 @@ public:
         return (unsigned int) (m_storage >> kNumFractionalBits);
     }
 
-    template <unsigned int rhsNumFractionalBits, typename rhsTStorageType>
-    MathsIntermediateFixedPoint(const MathsIntermediateFixedPoint<rhsNumFractionalBits, rhsTStorageType>& rhs)
+    template<typename T>
+    constexpr IntermediateType operator + (const T& rhs) const
     {
-        m_storage = rhs.getStorage();
-        if(rhsNumFractionalBits > kNumFractionalBits)
-        {
-            m_storage >>= (rhsNumFractionalBits - kNumFractionalBits);
-        }
-        else if(rhsNumFractionalBits < kNumFractionalBits)
-        {
-            m_storage <<= (kNumFractionalBits - rhsNumFractionalBits);
-        }
+        return IntermediateType((IntermediateStorageType) getStorage() + IntermediateType(rhs).getStorage());
     }
 
-    MathsIntermediateFixedPoint& operator=(const MathsIntermediateFixedPoint& rhs)
+    template<typename T>
+    constexpr IntermediateType operator - (const T& rhs) const
     {
-        m_storage = rhs.m_storage;
-        return *this;
-    }
-    MathsIntermediateFixedPoint& operator=(float rhs)
-    {
-        m_storage = floatToStorageType(rhs);
-        return *this;
+        return IntermediateType((IntermediateStorageType) getStorage() - IntermediateType(rhs).getStorage());
     }
 
-    constexpr MathsIntermediateFixedPoint operator+(const MathsIntermediateFixedPoint& rhs) const
+    constexpr IntermediateType operator - () const
     {
-        return MathsIntermediateFixedPoint(m_storage + rhs.m_storage);
+        return IntermediateType(-(IntermediateStorageType) getStorage());
     }
 
-    constexpr MathsIntermediateFixedPoint operator-(const MathsIntermediateFixedPoint& rhs) const
+    constexpr IntermediateType operator * (int rhs) const
     {
-        return MathsIntermediateFixedPoint(m_storage - rhs.m_storage);
+        return IntermediateType((IntermediateStorageType) (getStorage() * rhs));
     }
 
-    constexpr MathsIntermediateFixedPoint operator-() const
+    template<typename T>
+    constexpr IntermediateType operator * (const T& rhs) const
     {
-        return MathsIntermediateFixedPoint(-m_storage);
+        return IntermediateType(((IntermediateStorageType) getStorage() * IntermediateType(rhs).getStorage()) >> kNumFractionalBits);
     }
 
-    constexpr MathsIntermediateFixedPoint operator*(int rhs) const
+    template<typename T>
+    constexpr IntermediateType operator / (const T& rhs) const
     {
-        return MathsIntermediateFixedPoint(((int)m_storage * rhs));
+        return IntermediateType(((IntermediateStorageType) getStorage() << kNumFractionalBits) / IntermediateType(rhs).getStorage());
     }
 
-    constexpr MathsIntermediateFixedPoint operator*(float rhs) const
+    constexpr IntermediateType operator / (int rhs) const
     {
-        return *this * fromFloat(rhs);
+        return IntermediateType((IntermediateStorageType)((IntermediateStorageType) getStorage() / rhs));
     }
 
-    constexpr MathsIntermediateFixedPoint operator >>(int rhs) const
+    constexpr IntermediateType operator >> (int rhs) const
     {
-        return MathsIntermediateFixedPoint(m_storage >> rhs);
+        return IntermediateType(((IntermediateStorageType) getStorage()) >> rhs);
     }
 
-    constexpr MathsIntermediateFixedPoint operator*(const MathsIntermediateFixedPoint& rhs) const
+    constexpr IntermediateType operator << (int rhs) const
     {
-        return MathsIntermediateFixedPoint((m_storage * rhs.m_storage) >> kNumFractionalBits);
-    }
-    constexpr MathsIntermediateFixedPoint operator/(const MathsIntermediateFixedPoint& rhs) const
-    {
-        return MathsIntermediateFixedPoint((m_storage << kNumFractionalBits) / rhs.m_storage);
+        return IntermediateType(((IntermediateStorageType) getStorage()) << rhs);
     }
 
-    MathsIntermediateFixedPoint& operator+=(const MathsIntermediateFixedPoint& rhs)
+    template<typename T>
+    constexpr FixedPoint& operator += (const T& rhs)
     {
-        m_storage += rhs.m_storage;
+        *this = *this + rhs;
         return *this;
     }
 
-    MathsIntermediateFixedPoint& operator<<=(int shift)
+    template<typename T>
+    constexpr FixedPoint& operator -= (const T& rhs)
     {
-        m_storage <<= shift;
+        *this = *this - rhs;
         return *this;
     }
 
-    MathsIntermediateFixedPoint& operator/=(int rhs)
+    template<typename T>
+    constexpr FixedPoint& operator *= (const T& rhs)
     {
-        m_storage /= rhs;
+        *this = *this * rhs;
         return *this;
     }
 
-    constexpr bool operator < (const MathsIntermediateFixedPoint& rhs) const
+    template<typename T>
+    constexpr FixedPoint& operator /= (const T& rhs)
     {
-        return m_storage < rhs.m_storage;
+        *this = *this / rhs;
+        return *this;
     }
 
-    constexpr bool operator > (const MathsIntermediateFixedPoint& rhs) const
+    template<typename T>
+    constexpr bool operator < (const T& rhs) const
     {
-        return m_storage > rhs.m_storage;
+        return m_storage < FixedPoint(rhs).getStorage();
     }
 
-    MathsIntermediateFixedPoint sqrt() const
+    template<typename T>
+    constexpr bool operator > (const T& rhs) const
     {
-        return MathsIntermediateFixedPoint((StorageType) FixedPointSqrt(m_storage, kNumFractionalBits));
+        return m_storage > FixedPoint(rhs).getStorage();
     }
 
-    constexpr MathsIntermediateFixedPoint frac() const
+    template<typename T>
+    constexpr bool operator != (const T& rhs) const
     {
-        return MathsIntermediateFixedPoint(m_storage & kFractionalBitsMask);
+        return m_storage != FixedPoint(rhs).getStorage();
     }
 
-    constexpr MathsIntermediateFixedPoint abs() const
+    IntermediateType sqrt() const
     {
-        return (*this < MathsIntermediateFixedPoint(0)) ? (MathsIntermediateFixedPoint(0) - *this) : *this;
+        return IntermediateType((IntermediateStorageType) FixedPointSqrt(m_storage, kNumFractionalBits));
     }
 
-    constexpr MathsIntermediateFixedPoint recip() const
+    constexpr IntermediateType frac() const
+    {
+        return IntermediateType((IntermediateStorageType) m_storage & kFractionalBitsMask);
+    }
+
+    constexpr IntermediateType abs() const
+    {
+        return (*this < 0) ? -*this : *this;
+    }
+
+    constexpr IntermediateType recip() const
     {
         constexpr int kPreShift = kIsSigned ? (int)kNumWholeBits - 2 : (int)kNumWholeBits - 1;
         constexpr int kPostShift = kPreShift - (int)kNumFractionalBits;
-        return MathsIntermediateFixedPoint(SignedShift((StorageType) ((1 << (kNumFractionalBits + kPreShift)) / m_storage), kPostShift));
+        return IntermediateType(SignedShift((IntermediateStorageType) ((1 << (kNumFractionalBits + kPreShift)) / (IntermediateStorageType)m_storage), kPostShift));
     }
 
     constexpr StorageType getStorage() const
@@ -175,213 +185,6 @@ public:
     constexpr StorageType getIntegerPart() const
     {
         return m_storage >> kNumFractionalBits;
-    }
-
-private:
-    static constexpr StorageType floatToStorageType(float val)
-    {
-        return (StorageType)(val * kFractionalBitsMul);
-    }
-
-    static constexpr float storageTypeToFloat(StorageType val)
-    {
-        return ((float)val) * kRecipFractionalBitsMul;
-    }
-
-    StorageType m_storage;
-};
-
-template <unsigned int numFractionalBits, typename TStorageType, typename TMathsIntermediateType, bool doClamping = true>
-class FixedPoint
-{
-public:
-    typedef TStorageType StorageType;
-    typedef TMathsIntermediateType MathsIntermediateStorageType;
-    typedef MathsIntermediateFixedPoint<numFractionalBits, TMathsIntermediateType> MathsIntermediateType;
-
-    static constexpr unsigned int kNumFractionalBits = numFractionalBits;
-    static constexpr unsigned int kNumWholeBits = (sizeof(StorageType) * 8) - kNumFractionalBits;
-    static constexpr bool kIsSigned = ((StorageType)-1) < 0;
-    static constexpr float kFractionalBitsMul = (float)(1 << kNumFractionalBits);
-    static constexpr float kRecipFractionalBitsMul = 1.0f / kFractionalBitsMul;
-    static constexpr MathsIntermediateStorageType kFractionalBitsMask = (1 << numFractionalBits) - 1;
-    static constexpr StorageType kStorageMSB = (StorageType)((~0ull) << (kNumWholeBits + kNumFractionalBits - 1));
-    static constexpr StorageType kMinStorageType = kIsSigned ? kStorageMSB : (StorageType)0;
-    static constexpr StorageType kMaxStorageType = kIsSigned ? ~kStorageMSB : (StorageType)~0ull;
-    static constexpr MathsIntermediateStorageType kMinIntermediateType = (MathsIntermediateStorageType)kMinStorageType;
-    static constexpr MathsIntermediateStorageType kMaxIntermediateType = (MathsIntermediateStorageType)kMaxStorageType;
-    static constexpr float kMinFloat = ((float)kMinStorageType) * kRecipFractionalBitsMul;
-    static constexpr float kMaxFloat = ((float)kMaxStorageType) * kRecipFractionalBitsMul;
-
-    constexpr FixedPoint()
-    {}
-    constexpr FixedPoint(float val) : m_storage(floatToStorageType(val))
-    {}
-    constexpr FixedPoint(int val) : m_storage(clamp(((MathsIntermediateStorageType)val) << kNumFractionalBits))
-    {}
-    constexpr FixedPoint(unsigned int val) : m_storage(clamp(((MathsIntermediateStorageType)val) << kNumFractionalBits))
-    {}
-    constexpr FixedPoint(StorageType val) : m_storage(val)
-    {}
-
-    template <unsigned int otherNumFractionalBits, typename otherTStorageType, typename otherTMathsIntermediateType, bool otherDoClamping>
-    constexpr FixedPoint(const FixedPoint<otherNumFractionalBits, otherTStorageType, otherTMathsIntermediateType, otherDoClamping>& val)
-    : m_storage(storageFromOtherFormat(val.getStorage(), otherNumFractionalBits))
-    {}
-
-    template <unsigned int otherNumFractionalBits, typename otherTStorageType>
-    constexpr FixedPoint(const MathsIntermediateFixedPoint<otherNumFractionalBits, otherTStorageType>& val)
-    : m_storage(storageFromOtherFormat(val.getStorage(), otherNumFractionalBits))
-    {}
-
-    explicit constexpr operator float() const
-    {
-        return storageTypeToFloat(m_storage);
-    }
-
-    explicit constexpr operator int() const
-    {
-        return (int) (m_storage >> kNumFractionalBits);
-    }
-
-    explicit constexpr operator unsigned int() const
-    {
-        return (unsigned int) (m_storage >> kNumFractionalBits);
-    }
-
-    constexpr operator MathsIntermediateType() const
-    {
-        return { (MathsIntermediateStorageType)m_storage };
-    }
-
-    template <unsigned int otherNumFractionalBits, typename otherTStorageType, typename otherTMathsIntermediateType, bool otherDoClamping>
-    FixedPoint& operator=(const FixedPoint<otherNumFractionalBits, otherTStorageType, otherTMathsIntermediateType, otherDoClamping>& rhs)
-    {
-        storeFromOtherFormat(rhs.getStorage(), otherNumFractionalBits);
-        return *this;
-    }
-    FixedPoint& operator=(float rhs)
-    {
-        m_storage = floatToStorageType(rhs);
-        return *this;
-    }
-
-    template <unsigned int otherNumFractionalBits, typename otherTStorageType>
-    FixedPoint& operator=(const MathsIntermediateFixedPoint<otherNumFractionalBits, otherTStorageType> rhs)
-    {
-        storeFromOtherFormat(rhs.getStorage(), otherNumFractionalBits);
-        return *this;
-    }
-
-    constexpr MathsIntermediateType operator+(const FixedPoint& rhs) const
-    {
-        return (MathsIntermediateType) * this + (MathsIntermediateType)rhs;
-    }
-
-    constexpr MathsIntermediateType operator-() const
-    {
-        return (MathsIntermediateType)-m_storage;
-    }
-
-    constexpr MathsIntermediateType operator-(const FixedPoint& rhs) const
-    {
-        return (MathsIntermediateType)m_storage - (MathsIntermediateType)rhs.m_storage;
-    }
-
-    constexpr MathsIntermediateType operator*(int rhs) const
-    {
-        return (MathsIntermediateType)((int)m_storage * rhs);
-    }
-
-    constexpr MathsIntermediateType operator*(const MathsIntermediateType& rhs) const
-    {
-        return (MathsIntermediateType)m_storage * rhs;
-    }
-
-    constexpr MathsIntermediateType operator*(float rhs) const
-    {
-        return (MathsIntermediateType)m_storage * MathsIntermediateType::fromFloat(rhs);
-    }
-
-    constexpr MathsIntermediateType operator/(const FixedPoint& rhs) const
-    {
-        return (MathsIntermediateType)m_storage / (MathsIntermediateType)rhs.m_storage;
-    }
-
-    constexpr MathsIntermediateType operator/(int rhs) const
-    {
-        return (MathsIntermediateType)((int)m_storage / rhs);
-    }
-
-    FixedPoint& operator+=(const FixedPoint& rhs)
-    {
-        m_storage = clamp(*this + rhs);
-        return *this;
-    }
-
-    FixedPoint& operator-=(const FixedPoint& rhs)
-    {
-        m_storage = clamp(*this - rhs);
-        return *this;
-    }
-
-    FixedPoint& operator*=(const MathsIntermediateType& rhs)
-    {
-        m_storage = clamp((MathsIntermediateType)*this * rhs);
-        return *this;
-    }
-
-    FixedPoint& operator*=(int rhs)
-    {
-        m_storage = clamp(*this * rhs);
-        return *this;
-    }
-
-    FixedPoint& operator/=(const FixedPoint& rhs)
-    {
-        m_storage = clamp(*this / rhs);
-        return *this;
-    }
-
-    FixedPoint& operator/=(int rhs)
-    {
-        m_storage = clamp(*this / rhs);
-        return *this;
-    }
-
-    constexpr bool operator < (const FixedPoint& rhs) const
-    {
-        return m_storage < rhs.m_storage;
-    }
-
-    constexpr bool operator > (const FixedPoint& rhs) const
-    {
-        return m_storage > rhs.m_storage;
-    }
-
-    constexpr bool operator != (const FixedPoint& rhs) const
-    {
-        return m_storage != rhs.m_storage;
-    }
-
-    MathsIntermediateType sqrt() const
-    {
-        return MathsIntermediateType((MathsIntermediateStorageType) FixedPointSqrt(m_storage, kNumFractionalBits));
-    }
-
-    constexpr MathsIntermediateType frac() const
-    {
-        return MathsIntermediateType((MathsIntermediateStorageType) m_storage & kFractionalBitsMask);
-    }
-
-    constexpr MathsIntermediateType recip() const
-    {
-        return MathsIntermediateType(*this).recip();
-    }
-
-    constexpr StorageType getStorage() const
-    {
-        return m_storage;
     }
 
     static FixedPoint randFullRange()
@@ -400,37 +203,33 @@ public:
     }
 
 private:
-    static constexpr StorageType floatToStorageType(float val)
+
+    // Specialisation to convert from a different fixed point format
+    template <unsigned int rhsNumFrac, typename rhsTStorage, typename rhsTIntermediateStorage, bool rhsDoClamping>
+    constexpr FixedPoint fromOtherFormat(const FixedPoint<rhsNumFrac, rhsTStorage, rhsTIntermediateStorage, rhsDoClamping>& rhs)
     {
-        return (StorageType)(clamp(val) * kFractionalBitsMul);
+        return FixedPoint((StorageType)clamp(SignedShift((IntermediateStorageType)rhs.getStorage(), rhs.kNumFractionalBits - kNumFractionalBits)));
+    }
+    // Specialisation to convert from float
+    constexpr FixedPoint fromOtherFormat(const float& rhs)
+    {
+        return FixedPoint((StorageType)clamp((IntermediateStorageType)(rhs * kFractionalBitsMul)));
     }
 
-    static constexpr float storageTypeToFloat(StorageType val)
+    constexpr float toFloat() const
     {
-        return ((float)val) * kRecipFractionalBitsMul;
+        return ((float)m_storage) * kRecipFractionalBitsMul;
     }
 
     static constexpr float clamp(float val)
     {
         return doClamping ? ((val >= kMaxFloat) ? kMaxFloat : ((val <= kMinFloat) ? kMinFloat : val)) : val;
     }
-    static constexpr StorageType clamp(MathsIntermediateType val)
+    static constexpr IntermediateStorageType clamp(IntermediateStorageType val)
     {
         return doClamping ?
-                   ((val.getStorage() >= kMaxIntermediateType) ?
-                        kMaxStorageType :
-                        ((val.getStorage() <= kMinIntermediateType) ? kMinStorageType : (StorageType)val.getStorage())) :
-                   (StorageType)val.getStorage();
-    }
-
-    constexpr StorageType storageFromOtherFormat(MathsIntermediateStorageType src, uint32_t srcNumFractionalBits)
-    {
-        src = SignedShift(src, (int) srcNumFractionalBits - (int) kNumFractionalBits);
-        return clamp(MathsIntermediateType(src));
-    }
-    constexpr void storeFromOtherFormat(MathsIntermediateStorageType src, uint32_t srcNumFractionalBits)
-    {
-        m_storage = storageFromOtherFormat(src, srcNumFractionalBits);
+                   ((val >= kMaxIntermediateType) ? kMaxIntermediateType : ((val <= kMinIntermediateType) ? kMinIntermediateType : val)) :
+                   val;
     }
 
     StorageType m_storage;
@@ -440,24 +239,24 @@ private:
 // and also gives you the option to pre-shift (right) either or both arguments
 // in order to prevent overflow.
 template<typename TA, typename TB>
-constexpr static inline typename TA::MathsIntermediateType Mul(TA a, TB b, int32_t preShiftBitsA = 0, int32_t preShiftBitsB = 0)
+constexpr static inline typename TA::IntermediateType Mul(TA a, TB b, int32_t preShiftBitsA = 0, int32_t preShiftBitsB = 0)
 {
-    typename TA::MathsIntermediateStorageType sa = ((typename TA::MathsIntermediateStorageType) a.getStorage()) >> preShiftBitsA;
-    typename TA::MathsIntermediateStorageType sb = ((typename TA::MathsIntermediateStorageType) b.getStorage()) >> preShiftBitsB;
+    typename TA::IntermediateStorageType sa = ((typename TA::IntermediateStorageType) a.getStorage()) >> preShiftBitsA;
+    typename TA::IntermediateStorageType sb = ((typename TA::IntermediateStorageType) b.getStorage()) >> preShiftBitsB;
     int32_t postShiftBits = (int32_t)TB::kNumFractionalBits - preShiftBitsA - preShiftBitsB;
-    return typename TA::MathsIntermediateType((sa * sb) >> postShiftBits);
+    return typename TA::IntermediateType((typename TA::IntermediateStorageType) ((sa * sb) >> postShiftBits));
 }
 
 // Free-function divide, that can divide two different fixed-point numbers
 // and also gives you the option to post-shift (left) in order to reduce the
 // pre-shift in order to prevent overflow.
 template<typename TA, typename TB>
-constexpr static inline typename TA::MathsIntermediateType Div(TA a, TB b, int32_t preShiftBitsA = (int32_t)TB::kNumFractionalBits, int32_t preShiftBitsB = 0 )
+constexpr static inline typename TA::IntermediateType Div(TA a, TB b, int32_t preShiftBitsA = (int32_t)TB::kNumFractionalBits, int32_t preShiftBitsB = 0 )
 {
-    typename TA::MathsIntermediateStorageType sa = ((typename TA::MathsIntermediateStorageType) a.getStorage()) << preShiftBitsA;
-    typename TA::MathsIntermediateStorageType sb = ((typename TA::MathsIntermediateStorageType) b.getStorage()) >> preShiftBitsB;
+    typename TA::IntermediateStorageType sa = ((typename TA::IntermediateStorageType) a.getStorage()) << preShiftBitsA;
+    typename TA::IntermediateStorageType sb = ((typename TA::IntermediateStorageType) b.getStorage()) >> preShiftBitsB;
     int32_t postShiftBits = (int32_t)TB::kNumFractionalBits - preShiftBitsA - preShiftBitsB;
-    return typename TA::MathsIntermediateType((uint32_t)(sa / sb) << postShiftBits);
+    return typename TA::IntermediateType((typename TA::IntermediateStorageType) ((uint32_t)(sa / sb) << postShiftBits));
 }
 
 void TestFixedPoint();

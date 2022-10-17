@@ -31,8 +31,13 @@ static constexpr inline bool equal(TFixedPoint val, float expected, float epsilo
     return floatabs((float) val - expected) < epsilon;
 }
 
-constexpr FixedPoint_S2_14::MathsIntermediateType kTestFixed = FixedPoint_S2_14(0.1f) + (FixedPoint_S2_14(0.8f / (float) 64) * 64);
+constexpr FixedPoint_S2_14 kTestFixed = FixedPoint_S2_14(0.1f) + (FixedPoint_S2_14(0.8f / (float) 64) * 64);
 constexpr float kTestFloat = (float) kTestFixed;
+
+//constexpr FixedPoint_S2_14 kTestFixed2 = FixedPoint_S2_14(0.1f) + (FixedPoint_S2_14(0.8f / (float) 64) * 64);
+constexpr FixedPoint_S2_14 kTestFixed2a = FixedPoint_S2_14(0.8f / (float) 64);
+constexpr FixedPoint_S2_14 kTestFixed2 = kTestFixed2a * (int) 64;
+constexpr float kTestFloat2 = (float) kTestFixed2;
 
 static_assert(equal(FixedPoint_S2_14(0.1f) * 0.1f, 0.01f), "");
 static_assert(equal(FixedPoint_S14_18(100.f).recip(), 0.01f), "");
@@ -216,3 +221,71 @@ int32_t FixedPointSqrt(int32_t inValue, int32_t numFractionalBits)
 
     return (neg ? -(int32_t)result : (int32_t)result);
 }
+
+
+template <unsigned int numFrac, typename TStorage, typename TIntermediateStorage>
+class FP2
+{
+public:
+    using IntermediateType = FP2<numFrac, TIntermediateStorage, TIntermediateStorage>;
+    static constexpr int kNumFractionalBits = numFrac;
+    static constexpr float kFractionalBitsMul = (float)(1 << kNumFractionalBits);
+    static constexpr float kRecipFractionalBitsMul = 1.f / kFractionalBitsMul;
+    
+    typedef TStorage StorageType;
+
+    // Construct from some other format
+    template<typename T>
+    constexpr FP2(const T& rhs)
+     : m_storage(fromOtherFormat(rhs).getStorage())
+     {}
+
+    constexpr StorageType getStorage() const { return m_storage; }
+
+    explicit constexpr operator float() const
+    {
+        return toFloat();
+    }
+
+    template<typename T>
+    constexpr IntermediateType operator + (const T& rhs) const
+    {
+        return IntermediateType(getStorage() + IntermediateType(rhs).getStorage());
+    }
+
+    template<typename T>
+    constexpr const FP2& operator += (const T& rhs) const
+    {
+        m_storage += IntermediateType(rhs).getStorage();
+        return *this;
+    }
+
+public:
+    explicit constexpr FP2(StorageType storage) : m_storage(storage) {}
+
+    // Specialisation to convert from a different fixed point format
+    template <unsigned int rhsNumFrac, typename rhsTStorage, typename rhsTIntermediateStorage>
+    constexpr FP2 fromOtherFormat(const FP2<rhsNumFrac, rhsTStorage, rhsTIntermediateStorage>& rhs)
+    {
+        return FP2(SignedShift((StorageType)rhs.getStorage(), rhs.kNumFractionalBits - kNumFractionalBits));
+    }
+    // Specialisation to convert from float
+    constexpr FP2 fromOtherFormat(const float& rhs)
+    {
+        return FP2((StorageType)(rhs * kFractionalBitsMul));
+    }
+
+    constexpr float toFloat() const
+    {
+        return ((float)m_storage) * kRecipFractionalBitsMul;
+    }
+
+    StorageType m_storage;
+};
+
+static constexpr FP2<8, int16_t, int32_t> kTestFP2_a = 0.5f;
+static constexpr FP2<10, int16_t, int32_t> kTestFP2_b = kTestFP2_a;
+static constexpr FP2<12, int16_t, int32_t> kTestFP2_c = kTestFP2_a + kTestFP2_b;
+static constexpr FP2<12, int16_t, int32_t> kTestFP2_d = kTestFP2_c + 0.3f;
+
+static constexpr float kTestFP2_f = (float) kTestFP2_d;
