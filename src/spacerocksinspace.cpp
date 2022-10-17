@@ -22,7 +22,7 @@ static constexpr GameScalar kFragmentRotationSpeed = kGlobalSpeedFloat * 0.05f;
 static constexpr GameScalar kTextFragmentRotationSpeed = kGlobalSpeedFloat * 0.02f;
 static constexpr GameScalar kPlayerShipRotationSpeed = kGlobalSpeedFloat * 0.1f;
 static constexpr GameScalar kThrust = kGlobalSpeedFloat * 0.0003f;
-static constexpr GameScalar kDrag = kGlobalSpeedFloat * 0.99f;
+static constexpr GameScalar kDrag = kGlobalSpeedFloat * 0.01f;
 static constexpr float kAsteroidSpeedScaleFloat = kGlobalSpeedFloat * 2.f;
 static constexpr GameScalar kAsteroidMaxRotationSpeed = kGlobalSpeedFloat * 0.03f;
 static constexpr float kAsteroidCollisionRadiusFloat = kGlobalScaleFloat * 2.7f;
@@ -83,15 +83,13 @@ static void initVecRandMinus1to1(GameVector2& vec)
 
 static void applyDrag(GameScalar& val, const GameScalar& drag)
 {
-    // If we just multiply by drag, then -ve numbers will never get to zero
-    // because of fixed point things.
     if(val < 0)
     {
-        val = -Mul(-val, drag, 6, 6);
+        val -= Mul(val, drag);
     }
     else
     {
-        val = Mul(val, drag, 6, 6);
+        val += Mul(-val, drag);
     }
 }
 
