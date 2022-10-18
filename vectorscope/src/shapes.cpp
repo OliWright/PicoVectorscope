@@ -3,13 +3,6 @@
 
 #include "transform2d.h"
 
-
-
-static inline FixedTransform2D::ScalarType saturate(FixedTransform2D::ScalarType val)
-{
-    return (val > 1.f) ? 1.f : (val < 0.f) ? 0.f : val;
-}
-
 static inline void pushVector(DisplayList& displayList, const FixedTransform2D::Vector2Type& point, Intensity intensity)
 {
     DisplayListVector2 displayPoint(saturate(point.x), saturate(point.y));
@@ -42,6 +35,7 @@ void PushShapeToDisplayList(DisplayList& displayList,
     transform.transformVector(point0, points[0]);
     pushVector(displayList, point0, Intensity(0.f));
     Intensity burnBoost = 0;
+    FixedTransform2D::Vector2Type previousPoint = point0;
     for (uint i = 1; i < numPoints; ++i)
     {
         FixedTransform2D::Vector2Type point;
@@ -53,12 +47,23 @@ void PushShapeToDisplayList(DisplayList& displayList,
             {
                 burnBoost = 0;
             }
-            if(burnBoost > 3)
+            else if(burnBoost > 2)
             {
-                return;
+                if(burnBoost > 3)
+                {
+                    return;
+                }
+                // The final segment
+                BurnLength fraction = BurnLength(1) - burnBoost.frac();
+                point.x = (point.x - previousPoint.x) * fraction + previousPoint.x;
+                point.y = (point.y - previousPoint.y) * fraction + previousPoint.y;
+
+                DisplayListVector2 displayPoint(saturate(point.x), saturate(point.y));
+                displayList.PushPoint(displayPoint.x, displayPoint.y, Intensity(1.f));
             }
         }
         pushVector(displayList, point, intensity + burnBoost);
+        previousPoint = point;
     }
     if (closed)
     {

@@ -8,8 +8,8 @@ typedef FixedPoint<20,int32_t,int32_t> GameScalar;
 typedef Vector2<GameScalar> GameVector2;
 
 static constexpr float kGlobalScaleFloat = 0.015f;
-static constexpr float kGlobalSpeedFloat = 1.f;
-
+static constexpr int kTargetRefreshRate = 480; // FPS
+static constexpr float kGlobalSpeedFloat = (float) 60.f / (float) kTargetRefreshRate;
 
 static constexpr GameScalar kGlobalScale = kGlobalScaleFloat;
 static constexpr GameScalar kGlobalSpeed = kGlobalSpeedFloat;
@@ -107,6 +107,13 @@ static bool testCollisionOctagon(const GameVector2& p0, const GameVector2& p1, G
     return (dx < distance) && (dy < distance) && ((dx + dy) < distance);
 }
 
+template<typename T>
+static inline void wrap(Vector2<T>& vec)
+{
+    vec.x = vec.x.frac();
+    vec.y = vec.y.frac();
+}
+
 //
 // Classes and Structs
 //
@@ -138,6 +145,7 @@ struct Fragments
             }
             
             fragment.Move();
+            wrap(fragment.m_position);
         }
 
         PushFragmentsToDisplayList(displayList, s_fragments, s_numFragments);
@@ -191,8 +199,9 @@ struct BaseObject
 
     void Move()
     {
-        m_position.x = (m_position.x + m_velocity.x).frac();
-        m_position.y = (m_position.y + m_velocity.y).frac();
+        m_position.x += m_velocity.x;
+        m_position.y += m_velocity.y;
+        wrap(m_position);
     }
 };
 
@@ -815,9 +824,9 @@ struct GameState
 };
 
 const GameState::StateInfo GameState::s_stateInfo[] = {
-    {10.f, State::AttractModeTitleDestroyed}, // AttractModeTitle
+    {8.f, State::AttractModeTitleDestroyed}, // AttractModeTitle
     {2.f, State::AttractModeDemo}, // AttractModeTitleDestroyed
-    {10.f, State::AttractModeTitle}, // AttractModeDemo
+    {7.f, State::AttractModeTitle}, // AttractModeDemo
     {0}, // GameStartLevel
     {0}, // GameWaitForShipSafe
     {0}, // Game
@@ -839,6 +848,8 @@ uint GameState::s_level;
 class SpaceRocksInSpace : public Demo
 {
 public:
+    SpaceRocksInSpace() : Demo(0, kTargetRefreshRate) {}
+
     void Init();
     void UpdateAndRender(DisplayList& displayList, float dt);
 };

@@ -259,6 +259,12 @@ constexpr static inline typename TA::IntermediateType Div(TA a, TB b, int32_t pr
     return typename TA::IntermediateType((typename TA::IntermediateStorageType) ((uint32_t)(sa / sb) << postShiftBits));
 }
 
+template<typename T>
+static inline T saturate(const T& val)
+{
+    return (val > 1.f) ? 1.f : (val < 0.f) ? 0.f : val;
+}
+
 void TestFixedPoint();
 
 #endif

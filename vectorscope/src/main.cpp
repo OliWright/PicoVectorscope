@@ -21,11 +21,12 @@ mutex_t displayListMutex[2];
 static uint32_t outputDisplayListIdx = 0;
 static uint32_t displayListIdx = 1;
 static volatile bool dacOutputRunning = false;
-static constexpr uint64_t kNumMicrosBetweenFrames = 1000000 / 60; // FPS
 static constexpr uint32_t kGeneralPurposeButtonPin = 20;
 static uint32_t coolDemoIdx = 0;
 static bool singleStepMode = false;
-static const float kDt = (float) kNumMicrosBetweenFrames / 1000000.f;
+
+static uint64_t s_numMicrosBetweenFrames = 1000000 / 60; // FPS
+static float s_dt = (float) s_numMicrosBetweenFrames / 1000000.f;
 
 static LogChannel FrameSynchronisation(false);
 static LogChannel Events(true);
@@ -46,8 +47,15 @@ constexpr uint kMaxDemos = 16;
 static Demo* s_demos[kMaxDemos] = {};
 static uint s_numDemos = 0;
 
-Demo::Demo(int order)
+static void initRefreshRate(const Demo& demo)
+{
+    s_numMicrosBetweenFrames = 1000000 / demo.GetTargetRefreshRate();
+    s_dt = (float) s_numMicrosBetweenFrames / 1000000.f;
+}
+
+Demo::Demo(int order, int m_targetRefreshRate)
 : m_order(order)
+, m_targetRefreshRate(m_targetRefreshRate)
 {
     uint demoInsertion = 0;
     for(; demoInsertion < s_numDemos; ++demoInsertion)
@@ -63,6 +71,10 @@ Demo::Demo(int order)
         s_demos[i] = s_demos[i-1];
     }
     s_demos[demoInsertion] = this;
+    if(demoInsertion == 0)
+    {
+        initRefreshRate(*this);
+    }
 }
 
 void checkButton()
@@ -73,6 +85,7 @@ void checkButton()
         {
             coolDemoIdx = 0;
         }
+        initRefreshRate(*s_demos[coolDemoIdx]);
     }
     switch(Serial::GetLastCharIn())
     {
@@ -94,10 +107,10 @@ void dacOutputLoop()
     static uint64_t frameStart = 0;
     uint64_t frameEnd = time_us_64();
     uint64_t frameDuration = frameEnd - frameStart;
-    if (frameDuration < kNumMicrosBetweenFrames)
+    if (frameDuration < s_numMicrosBetweenFrames)
     {
-        sleep_us(kNumMicrosBetweenFrames - frameDuration);
-        /*next*/ frameStart += kNumMicrosBetweenFrames;
+        sleep_us(s_numMicrosBetweenFrames - frameDuration);
+        /*next*/ frameStart += s_numMicrosBetweenFrames;
     }
     else
     {
@@ -116,10 +129,10 @@ void dacOutputLoop()
 
     // Write the entire display list out to the DACsFIFO buffers
     LOG_INFO(FrameSynchronisation, "DO S %d\n", outputDisplayListIdx);
-    LedStatus::SetStep(6, LedStatus::Brightness((float)DacOutput::GetFrameDurationUs() * (1.f / kNumMicrosBetweenFrames)), 400);
+    LedStatus::SetStep(6, LedStatus::Brightness((float)DacOutput::GetFrameDurationUs() * (1.f / s_numMicrosBetweenFrames)), 400);
     uint64_t dacOutStart = time_us_64();
     pDisplayList[outputDisplayListIdx]->OutputToDACs();
-    LedStatus::SetStep(4, LedStatus::Brightness((float)(time_us_64() - dacOutStart) * (1.f / kNumMicrosBetweenFrames)), 400);
+    LedStatus::SetStep(4, LedStatus::Brightness((float)(time_us_64() - dacOutStart) * (1.f / s_numMicrosBetweenFrames)), 400);
     LOG_INFO(FrameSynchronisation, "DO E %d\n", outputDisplayListIdx);
 }
 
@@ -149,7 +162,7 @@ void displayListUpdateLoop()
 
     Buttons::Update();
 
-    s_demos[coolDemoIdx]->UpdateAndRender(displayList, kDt);
+    s_demos[coolDemoIdx]->UpdateAndRender(displayList, s_dt);
 
     // Unlock it so that the display output knows it's ready
     LOG_INFO(FrameSynchronisation, "Fill E: %d\n", displayListIdx);
@@ -157,7 +170,7 @@ void displayListUpdateLoop()
     displayListIdx = 1 - displayListIdx;
 
     uint64_t frameEnd = time_us_64();
-    LedStatus::SetStep(2, LedStatus::Brightness((float)(frameEnd - frameStart) * (1.f / kNumMicrosBetweenFrames)), 400);
+    LedStatus::SetStep(2, LedStatus::Brightness((float)(frameEnd - frameStart) * (1.f / s_numMicrosBetweenFrames)), 400);
 }
 
 void dacOutputTask()

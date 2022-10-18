@@ -53,7 +53,6 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
     constexpr StarCoordIntermediate proj = StarCoordIntermediate(0.25f);
     constexpr StarCoordIntermediate zOffset = StarCoordIntermediate(32.f);
     constexpr StarCoordIntermediate farZ = StarCoordScalar((StarCoordScalar::StorageType) 0x7fff);
-    constexpr float farZFloat = (float) farZ;
     for(uint32_t i = 0; i < kNumStars; ++i)
     {
         StarCoord& star = s_stars[i];
@@ -81,7 +80,6 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
                 star2D.y = screenY;
                 //constexpr StarCoordIntermediate recipFarZ = Div(StarCoordIntermediate(1.f), (farZ + zOffset), 12, 4);
                 constexpr StarCoordIntermediate recipFarZ = (farZ + zOffset).recip();
-                constexpr float recipFarZFloat = (float) recipFarZ;
                 constexpr StarCoordIntermediate zeroBrightness = Mul(zOffset, recipFarZ, 16);
                 StarCoordIntermediate brightness = Mul(zOffset, recipZ, 16);
                 brightness -= zeroBrightness;
