@@ -2,9 +2,10 @@
 #define TYPES_H
 #include <cstdint>
 
-template <typename ScalarType = float>
+template <typename TScalarType = float>
 struct Vector2
 {
+    typedef TScalarType ScalarType;
     ScalarType x, y;
     Vector2()
     {

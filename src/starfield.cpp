@@ -1,15 +1,54 @@
 #include "picovectorscope.h"
 
 static constexpr uint32_t kNumStars = 1000;
-typedef FixedPoint<7, int16_t, int32_t, false> StarCoordScalar;
+typedef FixedPoint<8, 7, int16_t, int32_t, false> StarCoordScalar;
 struct StarCoord
 {
     StarCoordScalar x, y, z;
 };
-typedef FixedPoint<18, int32_t, int32_t, false> StarCoordIntermediate;
+typedef FixedPoint<8, 18, int32_t, int32_t, false> StarCoordIntermediate;
+
+constexpr float kProjFloat = 0.25f;
+constexpr float kNearZFloat = 32.f;
+
+constexpr StarCoordIntermediate kProj = StarCoordIntermediate(kProjFloat);
+constexpr StarCoordIntermediate kZOffset = StarCoordIntermediate(kNearZFloat);
+constexpr StarCoordIntermediate kNearZ = StarCoordIntermediate(kNearZFloat);
+constexpr StarCoordIntermediate kFarZ = kNearZ + StarCoordScalar::kMax;
+constexpr StarCoordIntermediate kRecipNearZ = kNearZ.recip();
+constexpr StarCoordIntermediate kRecipFarZ = kFarZ.recip();
+
+#if 0
+constexpr float recipNearZFloat = (float) kRecipNearZ;
+constexpr float idealrecipNearZFloat = 1.f / kNearZFloat;
+constexpr float projOverNearZFloat = (float) Mul<0,-4>(kProj, kRecipNearZ);
+constexpr float idealProjOverNearZFloat = kProjFloat * idealrecipNearZFloat;
+
+constexpr float recipFarZFloat = (float) kRecipFarZ;
+constexpr float idealrecipFarZFloat = 1.f / (float) kFarZ;
+constexpr float projOverFarZFloat = (float) Mul<0,-6>(kProj, kRecipFarZ);
+constexpr float idealProjOverFarZFloat = kProjFloat * idealrecipFarZFloat;
+
+constexpr StarCoord kTestStarCoord = {-107.f, 37.f, 231.2f};
+constexpr float kTestStarCoordXFloat = (float) kTestStarCoord.x;
+constexpr float kTestStarCoordYFloat = (float) kTestStarCoord.y;
+constexpr float kTestStarCoordZFloat = (float) kTestStarCoord.z;
+
+constexpr StarCoordIntermediate kTestStarRecipZ = ((StarCoordIntermediate)kTestStarCoord.z + kZOffset).recip();
+constexpr StarCoordIntermediate kTestStarRecipZ2 = Div(StarCoordIntermediate(1.f), ((StarCoordIntermediate)kTestStarCoord.z + kZOffset), 12, 4);
+constexpr float kTestStarRecipZFloat = (float) kTestStarRecipZ;
+constexpr float kTestStarRecipZFloat2 = (float) kTestStarRecipZ2;
+constexpr float kTestStarRecipZFloat3 = (float) 1.f / (kTestStarCoordZFloat + kNearZFloat);
+constexpr StarCoordIntermediate kTestStarProjOverZ = Mul<0,-4>(kProj, kTestStarRecipZ);
+constexpr float kTestStarProjOverZFloat = (float) kTestStarProjOverZ;
+constexpr float kTestStarProjOverZFloat2 = kProjFloat * kTestStarRecipZFloat3;
+constexpr StarCoordIntermediate kTestStarScreenX = Mul<StarCoordScalar::kNumWholeBits,-4>(kTestStarCoord.x, kTestStarProjOverZ) + 0.5f;
+constexpr float kTestStarScreenXFloat = (float) kTestStarScreenX;
+constexpr float kTestStarScreenXFloat2 = kTestStarCoordXFloat * kTestStarProjOverZFloat2 + 0.5f;
+#endif
+
 static StarCoord s_stars[kNumStars];
 
-//static constexpr StarCoordScalar s_starSpeed(0.1f);
 static StarCoordScalar s_starSpeed(2.f);
 static LogChannel StarDetails(false);
 
@@ -39,20 +78,17 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
 
     if(Buttons::IsJustPressed(Buttons::Id::Left))
     {
-        //s_starSpeed *= 0.75f; <--- Broken
-        s_starSpeed = s_starSpeed * 0.75f;
+        s_starSpeed *= 0.75f; //<--- Broken
+        //s_starSpeed = s_starSpeed * 0.75f;
     }
     if(Buttons::IsJustPressed(Buttons::Id::Right))
     {
-        s_starSpeed = s_starSpeed * 1.25f;
+        s_starSpeed *= 1.25f;
     }
 
 
     DisplayListPoint star2D = {0.f, 0.f, 0.2f};
     LOG_INFO(StarDetails, "Stars update\n");
-    constexpr StarCoordIntermediate proj = StarCoordIntermediate(0.25f);
-    constexpr StarCoordIntermediate zOffset = StarCoordIntermediate(32.f);
-    constexpr StarCoordIntermediate farZ = StarCoordScalar((StarCoordScalar::StorageType) 0x7fff);
     for(uint32_t i = 0; i < kNumStars; ++i)
     {
         StarCoord& star = s_stars[i];
@@ -62,32 +98,30 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
             star.z += StarCoordScalar(StarCoordScalar::kMaxStorageType);
         }
 
-        StarCoordIntermediate x = (StarCoordScalar::IntermediateType)star.x;
-        StarCoordIntermediate y = (StarCoordScalar::IntermediateType)star.y;
-        StarCoordIntermediate z = (StarCoordScalar::IntermediateType)star.z;
-        LOG_INFO(StarDetails, "x: %f, y: %f, z; %f\n", (float) x, (float) y, (float) z);
+        // StarCoordIntermediate x = (StarCoordScalar::IntermediateType)star.x;
+        // StarCoordIntermediate y = (StarCoordScalar::IntermediateType)star.y;
+        // StarCoordIntermediate z = (StarCoordScalar::IntermediateType)star.z;
+        // LOG_INFO(StarDetails, "x: %f, y: %f, z; %f\n", (float) x, (float) y, (float) z);
 
-        //StarCoordIntermediate recipZ = StarCoordIntermediate(1.f) / (z + zOffset);
-        StarCoordIntermediate recipZ = Div(StarCoordIntermediate(1.f), (z + zOffset), 12, 4);
-        StarCoordIntermediate projRecipZ = Mul(proj, recipZ, 8);
-        StarCoordIntermediate screenX = Mul(x, projRecipZ, 10) + StarCoordIntermediate(0.5f);
+        // Careful fixed-point math to maintain precision
+        StarCoordIntermediate recipZ = (z + kZOffset).recip();
+        StarCoordIntermediate projOverZ = Mul<0,0>(kProj, recipZ);
+        StarCoordIntermediate screenX = Mul<-4,StarCoordScalar::kNumWholeBits>(projOverZ, star.x) + 0.5f;
         if((screenX < StarCoordIntermediate(1.f)) && (screenX > StarCoordIntermediate(0.f)))
         {
-            StarCoordIntermediate screenY = Mul(y, projRecipZ, 10) + StarCoordIntermediate(0.5f);
+            StarCoordIntermediate screenY = Mul<-4,StarCoordScalar::kNumWholeBits>(projOverZ, star.y) + 0.5f;
             if((screenY < StarCoordIntermediate(1.f)) && (screenY > StarCoordIntermediate(0.f)))
             {
                 star2D.x = screenX;
                 star2D.y = screenY;
-                //constexpr StarCoordIntermediate recipFarZ = Div(StarCoordIntermediate(1.f), (farZ + zOffset), 12, 4);
-                constexpr StarCoordIntermediate recipFarZ = (farZ + zOffset).recip();
-                constexpr StarCoordIntermediate zeroBrightness = Mul(zOffset, recipFarZ, 16);
-                StarCoordIntermediate brightness = Mul(zOffset, recipZ, 16);
+                constexpr StarCoordIntermediate zeroBrightness = kNearZ * kRecipFarZ;
+                StarCoordIntermediate brightness = kNearZ * recipZ; //< 1.0 at kNearZ
                 brightness -= zeroBrightness;
-                if(brightness > StarCoordIntermediate(0.f))
+                if(brightness > 0.f)
                 {
-                    if(brightness > StarCoordIntermediate(1.f))
+                    if(brightness > 1.f)
                     {
-                        brightness = StarCoordIntermediate(1.f);
+                        brightness = 1.f;
                     }
                     star2D.brightness = brightness;
                     displayList.PushPoint(star2D);
@@ -96,11 +130,4 @@ void Starfield::UpdateAndRender(DisplayList& displayList, float dt)
         }
         LOG_INFO(StarDetails, "x: %f, y: %f\n", (float) star2D.x, (float) star2D.y);
     }
-
-#if 0
-    for (uint32_t i = 0; i < kNumPoints; ++i)
-    {
-        displayList.PushPoint(points[i]);
-    }
-#endif
 }

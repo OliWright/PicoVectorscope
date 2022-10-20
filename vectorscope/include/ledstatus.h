@@ -8,7 +8,7 @@
 class LedStatus
 {
 public:
-    typedef FixedPoint<15, uint32_t, uint32_t> Brightness;
+    typedef FixedPoint<3, 15, uint32_t, uint32_t> Brightness;
     static void Init();
 
     static constexpr uint32_t kMaxSteps = 32;

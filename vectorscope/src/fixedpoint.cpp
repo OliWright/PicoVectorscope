@@ -15,10 +15,12 @@ uint32_t SimpleRand()
     return s_randSeed;
 }
 
-typedef FixedPoint<14, int16_t, int32_t, true /*doClamping*/> FixedPoint_S2_14;
-typedef FixedPoint<26, int32_t, int32_t, false> FixedPoint_S6_26;
-typedef FixedPoint<18, int32_t, int32_t, false> FixedPoint_S14_18;
-typedef FixedPoint<11, int32_t, int32_t, false> FixedPoint_S21_11;
+typedef FixedPoint<1,  14, int16_t, int32_t, true /*doClamping*/> FixedPoint_S1_14;
+typedef FixedPoint<5,  26, int32_t, int32_t, false> FixedPoint_S5_26;
+typedef FixedPoint<13, 18, int32_t, int32_t, false> FixedPoint_S13_18;
+typedef FixedPoint<20, 11, int32_t, int32_t, false> FixedPoint_S20_11;
+typedef FixedPoint<7,  24, int32_t, int32_t, false> FixedPoint_S7_24;
+typedef FixedPoint<8,  23, int32_t, int32_t, false> FixedPoint_S8_23;
 
 static constexpr inline float floatabs(float val)
 {
@@ -31,59 +33,67 @@ static constexpr inline bool equal(TFixedPoint val, float expected, float epsilo
     return floatabs((float) val - expected) < epsilon;
 }
 
-constexpr FixedPoint_S2_14 kTestFixed = FixedPoint_S2_14(0.1f) + (FixedPoint_S2_14(0.8f / (float) 64) * 64);
+constexpr FixedPoint_S1_14 kTestFixed = FixedPoint_S1_14(0.1f) + (FixedPoint_S1_14(0.8f / (float) 64) * 64);
 constexpr float kTestFloat = (float) kTestFixed;
 
-//constexpr FixedPoint_S2_14 kTestFixed2 = FixedPoint_S2_14(0.1f) + (FixedPoint_S2_14(0.8f / (float) 64) * 64);
-constexpr FixedPoint_S2_14 kTestFixed2a = FixedPoint_S2_14(0.8f / (float) 64);
-constexpr FixedPoint_S2_14 kTestFixed2 = kTestFixed2a * (int) 64;
+//constexpr FixedPoint_S1_14 kTestFixed2 = FixedPoint_S1_14(0.1f) + (FixedPoint_S1_14(0.8f / (float) 64) * 64);
+constexpr FixedPoint_S1_14 kTestFixed2a = FixedPoint_S1_14(0.8f / (float) 64);
+constexpr FixedPoint_S1_14 kTestFixed2 = kTestFixed2a * (int) 64;
 constexpr float kTestFloat2 = (float) kTestFixed2;
 
-static_assert(equal(FixedPoint_S2_14(0.1f) * 0.1f, 0.01f), "");
-static_assert(equal(FixedPoint_S14_18(100.f).recip(), 0.01f), "");
-static_assert(equal(FixedPoint_S14_18(100.25f).frac(), 0.25f), "");
-static_assert(equal(FixedPoint_S2_14(0.1f) * FixedPoint_S2_14(0.1f).recip(), 1.f), "");
-static_assert(equal(FixedPoint_S2_14(0.1f) + (FixedPoint_S2_14(0.8f / (float) 64) * 64), 0.9f), "");
-static_assert(equal(FixedPoint_S21_11(1.f / (float) 64) + (FixedPoint_S21_11(1.f / (float) 64) * 63), 1.f), "");
+constexpr float kTestFloat3 = (float) Mul<0,0>(FixedPoint_S1_14(0.1f), FixedPoint_S20_11(0.1f));
+constexpr FixedPoint_S7_24 kTestFixed3 = Mul<6,2>(FixedPoint_S7_24(63.f), FixedPoint_S8_23(-2.f));
+constexpr FixedPoint_S7_24 kTestFixed4 = -128;
+constexpr float kTestFloat4 = (float) kTestFixed3;
+
+constexpr FixedPoint_S1_14 kTestFixed5 = FixedPoint_S1_14(0.1f) * 0.1f;
+
+static_assert(equal(FixedPoint_S1_14(0.1f) * 0.1f, 0.01f), "");
+static_assert(equal(FixedPoint_S13_18(100.f).recip(), 0.01f), "");
+static_assert(equal(FixedPoint_S13_18(100.25f).frac(), 0.25f), "");
+//static_assert(equal(FixedPoint_S5_26(0.1f) * FixedPoint_S1_14(0.1f).recip(), 1.f), "");
+static_assert(equal(FixedPoint_S1_14(0.1f) + (FixedPoint_S1_14(0.8f / (float) 64) * 64), 0.9f), "");
+static_assert(equal(FixedPoint_S20_11(1.f / (float) 64) + (FixedPoint_S20_11(1.f / (float) 64) * 63), 1.f), "");
+static_assert(equal(Mul<6,2>(FixedPoint_S7_24(63.f), FixedPoint_S8_23(-2.f)), -126.f), "");
 
 void TestFixedPoint()
 {
 #if LOG_ENABLED
-    FixedPoint_S2_14 a;
+    FixedPoint_S1_14 a;
     a = 0.25f;
     LOG_INFO(FixedPointTesting, "a = %f (0.25)\n", (float)a);
 
     a = 1.1f;
-    a = a + FixedPoint_S2_14(3.f);
+    a = a + FixedPoint_S1_14(3.f);
     LOG_INFO(FixedPointTesting, "a = %f (1.99999)\n", (float)a);
 
     a = 1.4f;
-    a *= FixedPoint_S2_14(0.5f);
+    a *= FixedPoint_S1_14(0.5f);
     LOG_INFO(FixedPointTesting, "a = %f (0.7)\n", (float)a);
 
     a = 1.4f;
-    a = (a * FixedPoint_S2_14(0.5f));
+    a = (a * FixedPoint_S1_14(0.5f));
     LOG_INFO(FixedPointTesting, "a = %f (0.7)\n", (float)a);
 
     a = 0.9f;
-    a /= FixedPoint_S2_14(1.5f);
+    a /= FixedPoint_S1_14(1.5f);
     LOG_INFO(FixedPointTesting, "a = %f (0.6)\n", (float)a);
 
     a = 0.15f;
     a = a * 2;
     LOG_INFO(FixedPointTesting, "a = %f (0.3)\n", (float)a);
 
-    a = 0.15f;
-    a = a * (uint16_t)2;
-    LOG_INFO(FixedPointTesting, "a = %f (0.3)\n", (float)a);
+    // a = 0.15f;
+    // a = a * (uint16_t)2;
+    // LOG_INFO(FixedPointTesting, "a = %f (0.3)\n", (float)a);
 
-    a = FixedPoint_S2_14(1.f).sqrt();
+    a = FixedPoint_S1_14(1.f).sqrt();
     LOG_INFO(FixedPointTesting, "a = %f (1.0)\n", (float)a);
 
-    a = FixedPoint_S2_14(2.f).sqrt();
+    a = FixedPoint_S1_14(2.f).sqrt();
     LOG_INFO(FixedPointTesting, "a = %f (1.4142)\n", (float)a);
 
-    a = FixedPoint_S2_14(0.5f).sqrt();
+    a = FixedPoint_S1_14(0.5f).sqrt();
     LOG_INFO(FixedPointTesting, "a = %f (0.7071)\n", (float)a);
 
     int32_t sq = 0x10000;
@@ -94,19 +104,19 @@ void TestFixedPoint()
     sq = FixedPointSqrt(sq, 14);
     LOG_INFO(FixedPointTesting, "a = 0x%08x (0x00004000)\n", sq);
 
-    FixedPoint_S6_26 b = FixedPoint_S6_26(FixedPoint_S2_14(0.3f) - FixedPoint_S2_14(0.1f));
+    FixedPoint_S5_26 b = FixedPoint_S5_26(FixedPoint_S1_14(0.3f) - FixedPoint_S1_14(0.1f));
     LOG_INFO(FixedPointTesting, "b = %f (0.2)\n", (float)b);
 
-    b = FixedPoint_S6_26(FixedPoint_S2_14(1.f) / FixedPoint_S2_14(0.125f));
+    b = FixedPoint_S5_26(FixedPoint_S1_14(1.f) / FixedPoint_S1_14(0.125f));
     LOG_INFO(FixedPointTesting, "b = %f (8)\n", (float)b);
 
-    b = Div(FixedPoint_S6_26(1.f), FixedPoint_S6_26(8.f), 0, 0);
+    b = Div(FixedPoint_S5_26(1.f), FixedPoint_S5_26(8.f), 0, 0);
     LOG_INFO(FixedPointTesting, "b = %f (0.125)\n", (float)b);
 
-    b = Div(FixedPoint_S6_26(1.f), FixedPoint_S6_26(8.f), 4, 1);
+    b = Div(FixedPoint_S5_26(1.f), FixedPoint_S5_26(8.f), 4, 1);
     LOG_INFO(FixedPointTesting, "b = %f (0.125)\n", (float)b);
 
-    FixedPoint_S14_18 d = Div(FixedPoint_S14_18(1.f), FixedPoint_S14_18(8.f), 11, 4);
+    FixedPoint_S13_18 d = Div(FixedPoint_S13_18(1.f), FixedPoint_S13_18(8.f), 11, 4);
     LOG_INFO(FixedPointTesting, "d = %f (0.125)\n", (float)d);
 
     LOG_INFO(FixedPointTesting, "s = %f (0.479)\n", (float)SinTable::LookUp(0.5f));
@@ -222,70 +232,3 @@ int32_t FixedPointSqrt(int32_t inValue, int32_t numFractionalBits)
     return (neg ? -(int32_t)result : (int32_t)result);
 }
 
-
-template <unsigned int numFrac, typename TStorage, typename TIntermediateStorage>
-class FP2
-{
-public:
-    using IntermediateType = FP2<numFrac, TIntermediateStorage, TIntermediateStorage>;
-    static constexpr int kNumFractionalBits = numFrac;
-    static constexpr float kFractionalBitsMul = (float)(1 << kNumFractionalBits);
-    static constexpr float kRecipFractionalBitsMul = 1.f / kFractionalBitsMul;
-    
-    typedef TStorage StorageType;
-
-    // Construct from some other format
-    template<typename T>
-    constexpr FP2(const T& rhs)
-     : m_storage(fromOtherFormat(rhs).getStorage())
-     {}
-
-    constexpr StorageType getStorage() const { return m_storage; }
-
-    explicit constexpr operator float() const
-    {
-        return toFloat();
-    }
-
-    template<typename T>
-    constexpr IntermediateType operator + (const T& rhs) const
-    {
-        return IntermediateType(getStorage() + IntermediateType(rhs).getStorage());
-    }
-
-    template<typename T>
-    constexpr const FP2& operator += (const T& rhs) const
-    {
-        m_storage += IntermediateType(rhs).getStorage();
-        return *this;
-    }
-
-public:
-    explicit constexpr FP2(StorageType storage) : m_storage(storage) {}
-
-    // Specialisation to convert from a different fixed point format
-    template <unsigned int rhsNumFrac, typename rhsTStorage, typename rhsTIntermediateStorage>
-    constexpr FP2 fromOtherFormat(const FP2<rhsNumFrac, rhsTStorage, rhsTIntermediateStorage>& rhs)
-    {
-        return FP2(SignedShift((StorageType)rhs.getStorage(), rhs.kNumFractionalBits - kNumFractionalBits));
-    }
-    // Specialisation to convert from float
-    constexpr FP2 fromOtherFormat(const float& rhs)
-    {
-        return FP2((StorageType)(rhs * kFractionalBitsMul));
-    }
-
-    constexpr float toFloat() const
-    {
-        return ((float)m_storage) * kRecipFractionalBitsMul;
-    }
-
-    StorageType m_storage;
-};
-
-static constexpr FP2<8, int16_t, int32_t> kTestFP2_a = 0.5f;
-static constexpr FP2<10, int16_t, int32_t> kTestFP2_b = kTestFP2_a;
-static constexpr FP2<12, int16_t, int32_t> kTestFP2_c = kTestFP2_a + kTestFP2_b;
-static constexpr FP2<12, int16_t, int32_t> kTestFP2_d = kTestFP2_c + 0.3f;
-
-static constexpr float kTestFP2_f = (float) kTestFP2_d;

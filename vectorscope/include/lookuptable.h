@@ -5,7 +5,7 @@
 class LookUpTableBase
 {
 public:
-    typedef FixedPoint<12, uint32_t, uint32_t, false> Index;
+    typedef FixedPoint<4, 12, uint32_t, uint32_t, false> Index;
 
     LookUpTableBase(uint32_t valueSize, uint32_t numValues, bool wrapped, Index endIndex);
 
@@ -16,7 +16,7 @@ protected:
     uint32_t  m_numValues;
     uint32_t  m_valueSize;
     Index     m_endIndex;
-    Index     m_lookUpToIndex;
+    FixedPoint<14, 12, uint32_t, uint32_t, false> m_lookUpToIndex;
 };
 
 template<typename T>

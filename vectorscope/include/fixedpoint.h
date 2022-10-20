@@ -12,27 +12,72 @@ static constexpr inline T SignedShift(T val, int shift)
     return (shift < 0) ? (T)((uint32_t) val << -shift) : (val >> shift);
 }
 
-template <unsigned int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping = true>
+// Free-function multiply for fixed-point numbers.
+// Requires the caller to indicate the maximum number of whole-number bits
+// (non-fractional bits, excluding a sign bit) for each argument, in order
+// to maximise precision and prevent overflow
+template<int numWholeBitsA, int numWholeBitsB, typename TA, typename TB>
+constexpr static inline typename TA::IntermediateType Mul(TA a, TB b)
+{
+    constexpr int kTotalBitsA = TA::kNumFractionalBits + numWholeBitsA;
+    constexpr int kTotalBitsB = TB::kNumFractionalBits + numWholeBitsB;
+    constexpr int kNumResultBits = kTotalBitsA + kTotalBitsB + TA::kNumSignBits;
+    constexpr int kNumStorageBits = (int) sizeof(typename TA::IntermediateStorageType) * 8;
+    constexpr int kIdealPreshiftBits = kNumResultBits - kNumStorageBits;
+    constexpr int kActualPreshiftBits = (kIdealPreshiftBits > TB::kNumFractionalBits) ? TB::kNumFractionalBits : (kIdealPreshiftBits > 0) ? kIdealPreshiftBits : 0;
+    constexpr int kPostshiftBits = TB::kNumFractionalBits - kActualPreshiftBits;
+    // Distribute the preshift between the arguments
+    constexpr int kPreshiftA = kActualPreshiftBits >> 1;
+    constexpr int kPreshiftB = kActualPreshiftBits - kPreshiftA;
+
+    typename TA::IntermediateStorageType sa = ((typename TA::IntermediateStorageType) a.getStorage()) >> kPreshiftA;
+    typename TA::IntermediateStorageType sb = ((typename TA::IntermediateStorageType) b.getStorage()) >> kPreshiftB;
+    typename TA::IntermediateStorageType intResult = sa * sb;
+    return typename TA::IntermediateType(intResult >> kPostshiftBits);
+}
+
+#if 0
+// Free-function multiply, that can multiply two different fixed-point numbers
+// and also gives you the option to pre-shift (right) either or both arguments
+// in order to prevent overflow.
+template<typename TA, typename TB>
+constexpr static inline typename TA::MathsIntermediateType Mul(TA a, TB b, int32_t preShiftBitsA = 0, int32_t preShiftBitsB = 0)
+{
+    typename TA::MathsIntermediateStorageType sa = ((typename TA::MathsIntermediateStorageType) a.getStorage()) >> preShiftBitsA;
+    typename TA::MathsIntermediateStorageType sb = ((typename TA::MathsIntermediateStorageType) b.getStorage()) >> preShiftBitsB;
+    int32_t postShiftBits = (int32_t)TB::kNumFractionalBits - preShiftBitsA - preShiftBitsB;
+    return typename TA::MathsIntermediateType((sa * sb) >> postShiftBits);
+}
+#endif
+
+
+template <int numWholeBits, int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping = true>
 class FixedPoint
 {
 public:
     typedef TStorageType StorageType;
     typedef TIntermediateStorageType IntermediateStorageType;
-    using IntermediateType = FixedPoint<numFractionalBits, IntermediateStorageType, IntermediateStorageType, doClamping>;
+    using IntermediateType = FixedPoint<numWholeBits, numFractionalBits, IntermediateStorageType, IntermediateStorageType, doClamping>;
 
-    static constexpr unsigned int kNumFractionalBits = numFractionalBits;
-    static constexpr unsigned int kNumWholeBits = (sizeof(StorageType) * 8) - kNumFractionalBits;
+    static constexpr int kNumFractionalBits = numFractionalBits;
+    static constexpr int kNumStorageBits = (int) sizeof(StorageType) * 8;
     static constexpr bool kIsSigned = ((StorageType)-1) < 0;
+    static constexpr int kNumSignBits = kIsSigned ? 1 : 0;
+    static constexpr int kNumStorageBitsLessSign = kNumStorageBits - kNumSignBits;
+    static constexpr int kNumWholeBits = numWholeBits;
+    static_assert(kNumWholeBits <= (kNumStorageBits - kNumFractionalBits- kNumSignBits), "Too many whole bits for the underlying storage type");
     static constexpr float kFractionalBitsMul = (float)(1 << kNumFractionalBits);
     static constexpr float kRecipFractionalBitsMul = 1.0f / kFractionalBitsMul;
     static constexpr IntermediateStorageType kFractionalBitsMask = (1 << numFractionalBits) - 1;
-    static constexpr StorageType kStorageMSB = (StorageType)((~0ull) << (kNumWholeBits + kNumFractionalBits - 1));
+    static constexpr StorageType kStorageMSB = (StorageType)((~0ull) << (kNumStorageBits - 1));
     static constexpr StorageType kMinStorageType = kIsSigned ? kStorageMSB : (StorageType)0;
     static constexpr StorageType kMaxStorageType = kIsSigned ? ~kStorageMSB : (StorageType)~0ull;
     static constexpr IntermediateStorageType kMinIntermediateType = (IntermediateStorageType)kMinStorageType;
     static constexpr IntermediateStorageType kMaxIntermediateType = (IntermediateStorageType)kMaxStorageType;
     static constexpr float kMinFloat = ((float)kMinStorageType) * kRecipFractionalBitsMul;
     static constexpr float kMaxFloat = ((float)kMaxStorageType) * kRecipFractionalBitsMul;
+    static constexpr FixedPoint kMin(kMinStorageType);
+    static constexpr FixedPoint kMax(kMaxStorageType);
 
     constexpr FixedPoint()
     {}
@@ -82,10 +127,15 @@ public:
         return IntermediateType((IntermediateStorageType) (getStorage() * rhs));
     }
 
+    constexpr IntermediateType operator * (float rhs) const
+    {
+        return *this * IntermediateType(rhs);
+    }
+
     template<typename T>
     constexpr IntermediateType operator * (const T& rhs) const
     {
-        return IntermediateType(((IntermediateStorageType) getStorage() * IntermediateType(rhs).getStorage()) >> kNumFractionalBits);
+        return Mul<kNumWholeBits, T::kNumWholeBits>(*this, rhs);
     }
 
     template<typename T>
@@ -172,9 +222,21 @@ public:
 
     constexpr IntermediateType recip() const
     {
-        constexpr int kPreShift = kIsSigned ? (int)kNumWholeBits - 2 : (int)kNumWholeBits - 1;
-        constexpr int kPostShift = kPreShift - (int)kNumFractionalBits;
-        return IntermediateType(SignedShift((IntermediateStorageType) ((1 << (kNumFractionalBits + kPreShift)) / (IntermediateStorageType)m_storage), kPostShift));
+        // How many bits can we shift a 1.0 left until we hit the top of the storage
+        constexpr int kPreShiftLeft = IntermediateType::kNumStorageBits - kNumFractionalBits - kNumSignBits - 1;
+        // The numerator will be that 1.0, shifted left as far as we can
+        constexpr IntermediateStorageType kNumerator = (IntermediateStorageType) (1 << (kNumFractionalBits + kPreShiftLeft));
+        // If we just divide now, how many bits will be need to shift the result left
+        // (The more we're able to pre-shift left, the less accuracy we'll lose in the result)
+        constexpr int kNominalPostShiftLeft = kNumFractionalBits - kPreShiftLeft;
+
+        constexpr int kMaxDenominatorShiftRight = kNominalPostShiftLeft;//IntermediateType::kNumStorageBits - kNumWholeBits - kNumFractionalBits - kNumSignBits;
+        //constexpr int kDenominatorShiftRight = (kNominalPostShiftLeft > 0) ? ((kNominalPostShiftLeft > kMaxDenominatorShiftRight) ? kMaxDenominatorShiftRight : kNominalPostShiftLeft) : 0;
+        constexpr int kDenominatorShiftRight = kNominalPostShiftLeft >> 1;
+        constexpr int kPostShiftLeft = kNominalPostShiftLeft - kDenominatorShiftRight;
+
+        IntermediateStorageType denominator = SignedShift((IntermediateStorageType) m_storage, kDenominatorShiftRight);
+        return  IntermediateType(SignedShift(kNumerator / denominator, -kPostShiftLeft));
     }
 
     constexpr StorageType getStorage() const
@@ -205,8 +267,8 @@ public:
 private:
 
     // Specialisation to convert from a different fixed point format
-    template <unsigned int rhsNumFrac, typename rhsTStorage, typename rhsTIntermediateStorage, bool rhsDoClamping>
-    constexpr FixedPoint fromOtherFormat(const FixedPoint<rhsNumFrac, rhsTStorage, rhsTIntermediateStorage, rhsDoClamping>& rhs)
+    template <int rhsNumWhole, int rhsNumFrac, typename rhsTStorage, typename rhsTIntermediateStorage, bool rhsDoClamping>
+    constexpr FixedPoint fromOtherFormat(const FixedPoint<rhsNumWhole, rhsNumFrac, rhsTStorage, rhsTIntermediateStorage, rhsDoClamping>& rhs)
     {
         return FixedPoint((StorageType)clamp(SignedShift((IntermediateStorageType)rhs.getStorage(), rhs.kNumFractionalBits - kNumFractionalBits)));
     }
@@ -235,16 +297,15 @@ private:
     StorageType m_storage;
 };
 
-// Free-function multiply, that can multiply two different fixed-point numbers
-// and also gives you the option to pre-shift (right) either or both arguments
-// in order to prevent overflow.
+// Deprecated
 template<typename TA, typename TB>
-constexpr static inline typename TA::IntermediateType Mul(TA a, TB b, int32_t preShiftBitsA = 0, int32_t preShiftBitsB = 0)
+constexpr static inline typename TA::IntermediateType OldMul(TA a, TB b, int32_t preShiftBitsA = 0, int32_t preShiftBitsB = 0)
 {
-    typename TA::IntermediateStorageType sa = ((typename TA::IntermediateStorageType) a.getStorage()) >> preShiftBitsA;
-    typename TA::IntermediateStorageType sb = ((typename TA::IntermediateStorageType) b.getStorage()) >> preShiftBitsB;
-    int32_t postShiftBits = (int32_t)TB::kNumFractionalBits - preShiftBitsA - preShiftBitsB;
-    return typename TA::IntermediateType((typename TA::IntermediateStorageType) ((sa * sb) >> postShiftBits));
+    return a * b;
+    // typename TA::IntermediateStorageType sa = ((typename TA::IntermediateStorageType) a.getStorage()) >> preShiftBitsA;
+    // typename TA::IntermediateStorageType sb = ((typename TA::IntermediateStorageType) b.getStorage()) >> preShiftBitsB;
+    // int32_t postShiftBits = (int32_t)TB::kNumFractionalBits - preShiftBitsA - preShiftBitsB;
+    // return typename TA::IntermediateType((typename TA::IntermediateStorageType) ((sa * sb) >> postShiftBits));
 }
 
 // Free-function divide, that can divide two different fixed-point numbers

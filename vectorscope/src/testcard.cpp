@@ -16,6 +16,7 @@ static uint32_t s_numFragments = 0;
 
 void TestCard::Init()
 {
+#if 0
     FixedTransform2D transform;
     transform.setAsScale(0.05f);
 
@@ -29,6 +30,7 @@ void TestCard::Init()
 
     // PushGameShape(displayList, transform, GameShape::eShip, Intensity(2.f));
     s_numFragments = FragmentGameShape(GameShape::eAsteroid0, transform, s_fragments, kMaxFragments);
+#endif
 }
 
 void TestCard::UpdateAndRender(DisplayList& displayList, float dt)
@@ -71,9 +73,18 @@ void TestCard::UpdateAndRender(DisplayList& displayList, float dt)
         displayList.PushPoint(x, 0.16f, intensity);
     }
 
-    // transform.setAsScale(0.05f);
-    // transform.setTranslation(FloatVector2(0.5f, 0.5f));
-    // PushGameShape(displayList, transform, GameShape::eShip, Intensity(2.f));
+    static float rotation = 0.f;
+    SinTableValue s, c;
+    rotation += 0.002f;
+    if(rotation > (kPi * 2.f))
+    {
+        rotation -= (kPi * 2.f);
+    }
+    SinTable::SinCos(rotation, s, c);
+    transform.setAsRotation(s, c);
+    transform *= 0.05f;
+    transform.setTranslation(FixedTransform2D::Vector2Type(0.5f, 0.5f));
+    PushGameShape(displayList, transform, GameShape::eAsteroid0, Intensity(1.f));
 
     PushFragmentsToDisplayList(displayList, s_fragments, s_numFragments);
 }

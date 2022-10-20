@@ -4,11 +4,15 @@
 // Constants
 //
 
-typedef FixedPoint<20,int32_t,int32_t> GameScalar;
+typedef FixedPoint<4,20,int32_t,int32_t> GameScalar;
 typedef Vector2<GameScalar> GameVector2;
+typedef FixedPoint<1,20,int32_t,int32_t> Velocity;
+typedef Vector2<Velocity> VelocityVector2;
+typedef FixedPoint<1,20,int32_t,int32_t> Acceleration;
+typedef Vector2<Acceleration> AccelerationVector2;
 
 static constexpr float kGlobalScaleFloat = 0.015f;
-static constexpr int kTargetRefreshRate = 480; // FPS
+static constexpr int kTargetRefreshRate = 240; // FPS
 static constexpr float kGlobalSpeedFloat = (float) 60.f / (float) kTargetRefreshRate;
 
 static constexpr GameScalar kGlobalScale = kGlobalScaleFloat;
@@ -16,26 +20,26 @@ static constexpr GameScalar kGlobalSpeed = kGlobalSpeedFloat;
 static constexpr GameScalar kRecipGlobalSpeed = 1.f / kGlobalSpeedFloat;
 static constexpr GameScalar kBulletSpeed = kGlobalSpeedFloat * 0.01f;
 static constexpr uint32_t kBulletLife = (uint) (kRecipGlobalSpeed * 60);
-static constexpr GameScalar kParticleSpeed = kGlobalSpeedFloat * 0.004f;
-static constexpr GameScalar kFragmentSpeed = kGlobalSpeedFloat * 0.002f;
+static constexpr Velocity kParticleSpeed = kGlobalSpeedFloat * 0.004f;
+static constexpr Velocity kFragmentSpeed = kGlobalSpeedFloat * 0.002f;
 static constexpr GameScalar kFragmentRotationSpeed = kGlobalSpeedFloat * 0.05f;
 static constexpr GameScalar kTextFragmentRotationSpeed = kGlobalSpeedFloat * 0.02f;
 static constexpr GameScalar kPlayerShipRotationSpeed = kGlobalSpeedFloat * 0.1f;
-static constexpr GameScalar kThrust = kGlobalSpeedFloat * 0.0001f;
-static constexpr GameScalar kDrag = kGlobalSpeedFloat * 0.01f;
+static constexpr Velocity kThrust = kGlobalSpeedFloat * 0.0001f;
+static constexpr Velocity kDrag = kGlobalSpeedFloat * 0.01f;
 static constexpr float kAsteroidSpeedScaleFloat = kGlobalSpeedFloat * 2.f;
 static constexpr GameScalar kAsteroidMaxRotationSpeed = kGlobalSpeedFloat * 0.03f;
 static constexpr float kAsteroidCollisionRadiusFloat = kGlobalScaleFloat * 2.7f;
 static constexpr float kBulletMass = 0.1f;
 static constexpr uint kMaxBullets = 4;
 static constexpr uint kMaxParticles = 128;
-static constexpr uint kParticleLife = (uint) (kRecipGlobalSpeed * 10);
+static constexpr uint kParticleLife = (uint) (10.f / kGlobalSpeedFloat);
 static constexpr uint kMaxAsteroids = 32;
 static constexpr uint kNumLives = 3;
 static constexpr GameScalar kPlayerShipScale = kGlobalScale;
-static constexpr GameScalar kBulletLaunchOffset = Mul(kPlayerShipScale, GameScalar(3.3f), 6, 4);
-static constexpr GameScalar kSafeRadius = Mul(kGlobalScale, GameScalar(10.f), 6, 4);
-static constexpr Intensity kRecipParticleLife = Intensity(kParticleLife).recip();
+static constexpr GameScalar kBulletLaunchOffset = kPlayerShipScale * 3.3f;
+static constexpr GameScalar kSafeRadius = kGlobalScaleFloat * 10.f;
+static constexpr Intensity kRecipParticleLife = 1.f / kParticleLife;
 
 static const char* s_title = "SPACE ROCKS\nIN\nSPACE";
 static const BurnLength s_titleTotalBurnLength = CalcBurnLength(s_title);
@@ -50,8 +54,8 @@ static constexpr GameScalar kGame1 = kSin1;
 static constexpr int32_t kShiftTest = SignedShift(2, 1);
 
 static constexpr float kCastTest = (float) GameScalar(kSin1);
-static constexpr GameScalar kThrustTest = Mul(GameScalar(SinTableValue(0.1f)), kThrust, 6);
-static constexpr GameScalar kThrustTest2 = Mul(GameScalar(SinTableValue(-1.f)), kThrust, 6);
+static constexpr Velocity kThrustTest = Mul<1,-4>(Velocity(0.1f), kThrust);
+static constexpr Velocity kThrustTest2 = Mul<1,-4>(Velocity(-1.f), kThrust);
 
 static LogChannel SpaceRocks(true);
 
@@ -59,41 +63,56 @@ static LogChannel SpaceRocks(true);
 // Some helper functions
 //
 
-static void normalize(GameVector2& vec)
+template<typename T>
+static void normalize(T& vec)
 {
-    GameScalar::IntermediateType length = (Mul(vec.x, vec.x, 6, 6) + Mul(vec.y, vec.y, 6, 6)).sqrt();
+    typedef FixedPoint<14,14,int32_t,int32_t> NormScalar;
+    NormScalar x = vec.x;
+    NormScalar y = vec.y;
+    typename T::ScalarType::IntermediateType length = ((x * x) + (y * y)).sqrt();
     //GameScalar::IntermediateType length = ((vec.x * vec.x) + (vec.y * vec.y)).sqrt();
-    GameScalar::IntermediateType recipLength = length.recip();
+    typename T::ScalarType::IntermediateType recipLength = length.recip();
 
-    vec.x = Mul(vec.x, recipLength, 6, 10);
-    vec.y = Mul(vec.y, recipLength, 6, 10);
+    vec.x *= recipLength;
+    vec.y *= recipLength;
 }
 
-static void initVecRand0to1(GameVector2& vec)
+template<typename T>
+static void randomNormal(T& vec)
 {
-    vec.x = GameScalar::randZeroToOne();
-    vec.y = GameScalar::randZeroToOne();
+    SinTableValue s, c;
+    SinTable::SinCos(LookUpTableBase::Index::randZeroToOne() * (kPi * 2), s, c);
+    vec.x = s;
+    vec.y = c;
 }
 
-static void initVecRandMinus1to1(GameVector2& vec)
+template<typename T>
+static void initVecRand0to1(T& vec)
 {
-    vec.x = GameScalar::randMinusOneToOne();
-    vec.y = GameScalar::randMinusOneToOne();
+    vec.x = T::ScalarType::randZeroToOne();
+    vec.y = T::ScalarType::randZeroToOne();
 }
 
-static void applyDrag(GameScalar& val, const GameScalar& drag)
+template<typename T>
+static void initVecRandMinus1to1(T& vec)
+{
+    vec.x = T::ScalarType::randMinusOneToOne();
+    vec.y = T::ScalarType::randMinusOneToOne();
+}
+
+static void applyDrag(Velocity& val, const Velocity& drag)
 {
     if(val < 0)
     {
-        val -= Mul(val, drag);
+        val -= Mul<1,-4>(val, drag);
     }
     else
     {
-        val += Mul(-val, drag);
+        val += Mul<1,-4>(-val, drag);
     }
 }
 
-static void applyDrag(GameVector2& vec, const GameScalar& drag)
+static void applyDrag(VelocityVector2& vec, const Velocity& drag)
 {
     applyDrag(vec.x, drag);
     applyDrag(vec.y, drag);
@@ -151,16 +170,16 @@ struct Fragments
         PushFragmentsToDisplayList(displayList, s_fragments, s_numFragments);
     }
 
-    static void Add(GameShape shape, const GameVector2& baseSpeed, const FixedTransform2D& transform, Intensity intensity)
+    static void Add(GameShape shape, const VelocityVector2& baseSpeed, const FixedTransform2D& transform, Intensity intensity)
     {
         uint numNewFragments = FragmentGameShape(shape, transform, s_fragments + s_numFragments, kMaxFragments - s_numFragments);
         for(uint i = 0; i < numNewFragments; ++i)
         {
             Fragment& fragment = s_fragments[s_numFragments + i];
-            fragment.m_velocity.x = baseSpeed.x + Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6);
-            fragment.m_velocity.y = baseSpeed.y + Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6);
+            fragment.m_velocity.x = baseSpeed.x + Mul<1,-4>(Velocity::randMinusOneToOne(), kFragmentSpeed);
+            fragment.m_velocity.y = baseSpeed.y + Mul<1,-4>(Velocity::randMinusOneToOne(), kFragmentSpeed);
             fragment.m_intensity = intensity * (Intensity::randZeroToOne() + 0.5f);
-            fragment.m_rotationSpeed = Mul(GameScalar::randMinusOneToOne(), kFragmentRotationSpeed, 6);
+            fragment.m_rotationSpeed = Mul<1,-4>(GameScalar::randMinusOneToOne(), kFragmentRotationSpeed);
         }
         s_numFragments += numNewFragments;
     }
@@ -171,10 +190,10 @@ struct Fragments
         for(uint i = 0; i < numNewFragments; ++i)
         {
             Fragment& fragment = s_fragments[s_numFragments + i];
-            fragment.m_velocity.x = Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6) * 0.5f;
-            fragment.m_velocity.y = Mul(GameScalar::randMinusOneToOne(), kFragmentSpeed, 6) * 0.5f;
+            fragment.m_velocity.x = Mul<1,-4>(Velocity::randMinusOneToOne(), kFragmentSpeed) * 0.5f;
+            fragment.m_velocity.y = Mul<1,-4>(Velocity::randMinusOneToOne(), kFragmentSpeed) * 0.5f;
             fragment.m_intensity = Intensity::randZeroToOne() + 0.5f;
-            fragment.m_rotationSpeed = Mul(GameScalar::randMinusOneToOne(), kTextFragmentRotationSpeed, 6);
+            fragment.m_rotationSpeed = Mul<1,-4>(GameScalar::randMinusOneToOne(), kTextFragmentRotationSpeed);
         }
         s_numFragments += numNewFragments;
     }
@@ -191,7 +210,7 @@ uint Fragments::s_numFragments = 0;
 struct BaseObject
 {
     GameVector2 m_position;
-    GameVector2 m_velocity;
+    VelocityVector2 m_velocity;
     Intensity m_brightness;
     bool m_active;
 
@@ -280,11 +299,11 @@ struct Bullet : public BaseObject
 
     void Fire(const GameVector2& position, const GameVector2& direction)
     {
-        m_position.x = position.x + Mul(direction.x, kBulletLaunchOffset, 6, 4);
-        m_position.y = position.y + Mul(direction.y, kBulletLaunchOffset, 6, 4);
+        m_position.x = position.x + Mul<1,1>(direction.x, kBulletLaunchOffset);
+        m_position.y = position.y + Mul<1,1>(direction.y, kBulletLaunchOffset);
         m_brightness = Intensity(1.f);
-        m_velocity.x = Mul(direction.x, kBulletSpeed, 6, 3);
-        m_velocity.y = Mul(direction.y, kBulletSpeed, 6, 3);
+        m_velocity.x = Mul<1,-4>(direction.x, kBulletSpeed);
+        m_velocity.y = Mul<1,-4>(direction.y, kBulletSpeed);
         m_launchFrame = s_frameCounter;
         m_active = true;
     }
@@ -331,8 +350,8 @@ struct Particle : public BaseObject
             particle.m_position.y = position.y;
             particle.m_brightness = brightness;
             particle.m_brightnessStep = brightnessStep;
-            particle.m_velocity.x = baseSpeed.x + Mul(GameScalar::randMinusOneToOne(), kParticleSpeed, 7, 1);
-            particle.m_velocity.y = baseSpeed.y + Mul(GameScalar::randMinusOneToOne(), kParticleSpeed, 7, 1);
+            particle.m_velocity.x = baseSpeed.x + Mul<1,-4>(GameScalar::randMinusOneToOne(), kParticleSpeed);
+            particle.m_velocity.y = baseSpeed.y + Mul<1,-4>(GameScalar::randMinusOneToOne(), kParticleSpeed);
             particle.m_active = true;
         }
     }
@@ -443,9 +462,10 @@ struct Asteroid : public ShapeObject
     {
         m_size = size;
         const SizeInfo& sizeInfo = s_sizeInfo[(int) size];
-        initVecRandMinus1to1(m_velocity);
-        normalize(m_velocity);
-        GameScalar speed = Mul(GameScalar::randZeroToOne(), sizeInfo.m_speedScale, 6) + sizeInfo.m_speedBias;
+        //initVecRandMinus1to1(m_velocity);
+        //normalize(m_velocity);
+        randomNormal(m_velocity);
+        Velocity speed = Mul<1,-4>(Velocity::randZeroToOne(), sizeInfo.m_speedScale) + sizeInfo.m_speedBias;
         speed = sizeInfo.m_speedBias;
         m_velocity.x *= speed;
         m_velocity.y *= speed;
@@ -498,8 +518,8 @@ struct Asteroid : public ShapeObject
                     
                     if(m_numHitsToDestroy > 0)
                     {
-                        m_velocity.x += Mul(bullet.m_velocity.x, sizeInfo.m_bulletMassOverAsteroidMass, 6, 4);
-                        m_velocity.y += Mul(bullet.m_velocity.y, sizeInfo.m_bulletMassOverAsteroidMass, 6, 4);
+                        m_velocity.x += bullet.m_velocity.x * sizeInfo.m_bulletMassOverAsteroidMass;
+                        m_velocity.y += bullet.m_velocity.y * sizeInfo.m_bulletMassOverAsteroidMass;
                     }
                     bullet.Kill();
                     break;
@@ -512,7 +532,7 @@ struct Asteroid : public ShapeObject
             // Break the asteroid apart
             FixedTransform2D transform;
             CalcTransform(transform);
-            GameVector2 parentVelocity = m_velocity;
+            VelocityVector2 parentVelocity = m_velocity;
             Fragments::Add(m_shape, parentVelocity, transform, 1.f);
             Destroy();
             if(m_size != Size::eSmall)
@@ -600,7 +620,7 @@ struct PlayerShip : public ShapeObject
     void Reset()
     {
         m_position = GameVector2(0.5f, 0.5f);
-        m_velocity = GameVector2(0.f, 0.f);
+        m_velocity = VelocityVector2(0.f, 0.f);
         m_rotation = 0.f;
         m_active = true;
     }
@@ -666,7 +686,7 @@ struct GameState
         Count
     };
 
-    typedef FixedPoint<13, int32_t, int32_t, false> Duration;
+    typedef FixedPoint<10, 13, int32_t, int32_t, false> Duration;
 
     struct StateInfo
     {
@@ -855,7 +875,7 @@ public:
 };
 static SpaceRocksInSpace s_spaceRocksInSpace;
 
-constexpr BurnLength test = Mul(BurnLength(20.f), BurnLength(10.f));
+constexpr BurnLength test = BurnLength(20.f) * BurnLength(10.f);
 
 void SpaceRocksInSpace::Init()
 {
@@ -891,8 +911,7 @@ void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
     }
     if(message != nullptr)
     {
-        //BurnLength burnLength = Mul(BurnLength(GameState::s_timeInCurrentState), BurnLength(20.f));
-        BurnLength burnLength = Mul(BurnLength(20.f), GameState::s_timeInCurrentState, 0, 4);
+        BurnLength burnLength = BurnLength(20.f) * GameState::s_timeInCurrentState;
         TextPrint(displayList, s_titleTextTransform, message, Intensity(1.f), burnLength, true);
     }
 
@@ -911,9 +930,9 @@ void SpaceRocksInSpace::UpdateAndRender(DisplayList& displayList, float dt)
     bool thrust = Buttons::IsHeld(Buttons::Id::Thrust);
     if(thrust)
     {
-        GameVector2 acceleration;
-        acceleration.x = Mul(GameScalar(c), kThrust, 6);
-        acceleration.y = Mul(GameScalar(s), kThrust, 6);
+        VelocityVector2 acceleration;
+        acceleration.x = Mul<1,-4>(Velocity(c), kThrust);
+        acceleration.y = Mul<1,-4>(Velocity(s), kThrust);
         s_playerShip.m_velocity.x += acceleration.x;
         s_playerShip.m_velocity.y += acceleration.y;
     }

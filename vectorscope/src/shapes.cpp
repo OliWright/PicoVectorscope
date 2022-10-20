@@ -3,6 +3,9 @@
 
 #include "transform2d.h"
 
+static constexpr uint kBurnFadeLength = 8;
+static constexpr BurnLength kBurnBoostMultiplier = 3.f / kBurnFadeLength;
+
 static inline void pushVector(DisplayList& displayList, const FixedTransform2D::Vector2Type& point, Intensity intensity)
 {
     DisplayListVector2 displayPoint(saturate(point.x), saturate(point.y));
@@ -42,14 +45,14 @@ void PushShapeToDisplayList(DisplayList& displayList,
         transform.transformVector(point, points[i]);
         if(burnLength != 0)
         {
-            burnBoost = BurnLength(i+3) - burnLength;
+            burnBoost = BurnLength(i+kBurnFadeLength) - burnLength;
             if(burnBoost < 0)
             {
                 burnBoost = 0;
             }
-            else if(burnBoost > 2)
+            else if(burnBoost > (kBurnFadeLength - 1))
             {
-                if(burnBoost > 3)
+                if(burnBoost > kBurnFadeLength)
                 {
                     return;
                 }
@@ -62,7 +65,7 @@ void PushShapeToDisplayList(DisplayList& displayList,
                 displayList.PushPoint(displayPoint.x, displayPoint.y, Intensity(1.f));
             }
         }
-        pushVector(displayList, point, intensity + burnBoost);
+        pushVector(displayList, point, intensity + (burnBoost * kBurnBoostMultiplier));
         previousPoint = point;
     }
     if (closed)

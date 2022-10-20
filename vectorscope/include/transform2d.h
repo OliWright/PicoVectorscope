@@ -93,4 +93,4 @@ struct Transform2D
 };
 
 typedef Transform2D<float> FloatTransform2D;
-typedef Transform2D<FixedPoint<12,int32_t,int32_t,false> > FixedTransform2D;
+typedef Transform2D<FixedPoint<3,12,int32_t,int32_t,false> > FixedTransform2D;

@@ -15,7 +15,7 @@ LookUpTableBase::LookUpTableBase(uint32_t valueSize, uint32_t numValues, bool wr
 
 LookUpTableBase::Index LookUpTableBase::LookUp(Index index, void*& outA, void*& outB) const
 {
-    Index actualIndex = Mul(index, m_lookUpToIndex, 4, 4);
+    Index actualIndex = index * m_lookUpToIndex;
     unsigned int intIndex = ((unsigned int) actualIndex) & (m_numValues - 1);
     unsigned int nextIntIndex = (intIndex + 1) & (m_numValues - 1);
     outA = (uint8_t*) m_table + (intIndex * m_valueSize);

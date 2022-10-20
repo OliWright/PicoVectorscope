@@ -5,7 +5,7 @@
 
 typedef FixedTransform2D::Vector2Type ShapeVector2;
 
-typedef FixedPoint<8, int32_t, int32_t, false> BurnLength;
+typedef FixedPoint<12, 8, int32_t, int32_t, false> BurnLength;
 
 void PushShapeToDisplayList(
     DisplayList& displayList, const ShapeVector2* points, uint32_t numPoints, Intensity intensity, bool closed);

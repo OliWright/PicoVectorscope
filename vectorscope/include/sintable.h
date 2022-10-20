@@ -2,7 +2,7 @@
 #include "lookuptable.h"
 #include "types.h"
 
-typedef FixedPoint<14,int16_t,int32_t> SinTableValue;
+typedef FixedPoint<1, 14,int16_t,int32_t> SinTableValue;
 
 class SinTable : public LookUpTable<SinTableValue>
 {
