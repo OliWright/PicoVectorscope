@@ -12,22 +12,22 @@
 
 #define SPEED_CONSTANT 2048
 
-#if !STEP_DIV_IN_DISPLAY_LIST
-static_assert(sizeof(DisplayListVector) == 6, "");
-#endif
-
 static LogChannel DisplayListSynchronisation(false);
 
 DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
-    : m_pDisplayListVectors((DisplayListVector*)malloc(maxNumItems * sizeof(DisplayListVector))),
+    : m_pDisplayListVectors((Vector*)malloc(maxNumItems * sizeof(Vector))),
       m_numDisplayListVectors(1),
       m_maxDisplayListVectors(maxNumItems),
-      m_pDisplayListPoints((DisplayListPoint*)malloc(maxNumPoints * sizeof(DisplayListPoint))),
+      m_pDisplayListPoints((Point*)malloc(maxNumPoints * sizeof(Point))),
       m_numDisplayListPoints(0),
       m_maxDisplayListPoints(maxNumPoints)
 {
+#if !STEP_DIV_IN_DISPLAY_LIST
+    static_assert(sizeof(Vector) == 6, "");
+#endif
+
     // Initialise the first vector in the displaylist
-    DisplayListVector& vector = m_pDisplayListVectors[0];
+    Vector& vector = m_pDisplayListVectors[0];
     vector.x = 0.f;
     vector.y = 0.f;
     vector.numSteps = 1;
@@ -36,7 +36,7 @@ DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
     vector.stepY = 0.f;
 #endif
 
-    DisplayListPoint& point = m_pDisplayListPoints[0];
+    Point& point = m_pDisplayListPoints[0];
     point.x = 0;
     point.y = 0;
     point.brightness = 1.f;
@@ -45,65 +45,37 @@ DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
 static DisplayListVector2 calibrationScale(1.f, 0.875f);
 static DisplayListVector2 calibrationBias(0.f, 0.0625f);
 
-static inline float Q_rsqrt( float number )
-{
-	int32_t i;
-	float x2, y;
-	const float threehalfs = 1.5F;
-    union BitCast
-    {
-        float f;
-        int32_t i;
-        BitCast(float val) { f = val; }
-        BitCast(int32_t val) { i = val; }
-    };
-
-	x2 = number * 0.5F;
-	y  = number;
-	i  = BitCast(number).i;                       // evil floating point bit level hacking
-	i  = 0x5f3759df - ( i >> 1 );               // what the fuck? 
-	y  = BitCast(i).f;
-	y  = y * ( threehalfs - ( x2 * y * y ) );   // 1st iteration
-	y  = y * ( threehalfs - ( x2 * y * y ) );   // 2nd iteration, this can be removed
-
-	return y;
-}
-
 void DisplayList::PushVector(DisplayListScalar x, DisplayListScalar y, Intensity intensity)
 {
     if (m_numDisplayListVectors >= (m_maxDisplayListVectors - 1)) // Leave space for the Terminator
     {
         return;
     }
-    const DisplayListVector& previous = m_pDisplayListVectors[m_numDisplayListVectors - 1];
-    DisplayListVector& vector = m_pDisplayListVectors[m_numDisplayListVectors++];
+    const Vector& previous = m_pDisplayListVectors[m_numDisplayListVectors - 1];
+    Vector& vector = m_pDisplayListVectors[m_numDisplayListVectors++];
     vector.x = (x * calibrationScale.x) + calibrationBias.x;
     vector.y = (y * calibrationScale.y) + calibrationBias.y;
     DisplayListScalar::IntermediateType dx = vector.x - previous.x;
     DisplayListScalar::IntermediateType dy = vector.y - previous.y;
-    intensity = intensity * intensity;
 
-    // Fixed point sqrt
     Intensity::IntermediateType length = ((dx * dx) + (dy * dy)).sqrt();
-    Intensity::IntermediateType time = intensity * length;
+    Intensity::IntermediateType time = intensity * intensity * length;
     uint32_t numSteps = (time * SPEED_CONSTANT).getIntegerPart() + 1;
     vector.numSteps = (numSteps > 0xffff) ? 0xffff : (uint16_t) numSteps;
 #if STEP_DIV_IN_DISPLAY_LIST
     vector.stepX = DisplayListIntermediate(dx) / vector.numSteps;
     vector.stepY = DisplayListIntermediate(dy) / vector.numSteps;
 #endif
-
-    //LOG_INFO("x: %f, y: %f, dx: %f, dy: %f\n", (float) vector.x, (float) vector.y, (float) vector.dx, (float) vector.dy);
 }
 
-void DisplayList::PushPoint(const DisplayListPoint& point)
+void DisplayList::PushPoint(DisplayListScalar x, DisplayListScalar y, Intensity intensity)
 {
     if(m_numDisplayListPoints < m_maxDisplayListPoints)
     {
-        DisplayListPoint& dst = m_pDisplayListPoints[m_numDisplayListPoints++];
-        dst.x = (point.x * calibrationScale.x) + calibrationBias.x;
-        dst.y = (point.y * calibrationScale.y) + calibrationBias.y;
-        dst.brightness = point.brightness;
+        Point& dst = m_pDisplayListPoints[m_numDisplayListPoints++];
+        dst.x = (x * calibrationScale.x) + calibrationBias.x;
+        dst.y = (y * calibrationScale.y) + calibrationBias.y;
+        dst.brightness = intensity;
     }
 }
 
@@ -111,12 +83,12 @@ void DisplayList::PushPoint(const DisplayListPoint& point)
 void DisplayList::terminateVectors()
 {
     assert(m_numDisplayListVectors < m_maxDisplayListVectors);
-    DisplayListVector& vector = m_pDisplayListVectors[m_numDisplayListVectors++];
+    Vector& vector = m_pDisplayListVectors[m_numDisplayListVectors++];
     vector.x = 0;
     vector.y = 0;
     vector.numSteps = 1;
 #if STEP_DIV_IN_DISPLAY_LIST
-    const DisplayListVector& previous = m_pDisplayListVectors[m_numDisplayListVectors - 2];
+    const Vector& previous = m_pDisplayListVectors[m_numDisplayListVectors - 2];
     vector.stepX = vector.x - previous.x;
     vector.stepY = vector.y - previous.y;
 #endif
@@ -125,7 +97,7 @@ void DisplayList::terminateVectors()
 void DisplayList::terminatePoints()
 {
     assert(m_numDisplayListPoints < m_maxDisplayListPoints);
-    DisplayListPoint& point = m_pDisplayListPoints[m_numDisplayListPoints++];
+    Point& point = m_pDisplayListPoints[m_numDisplayListPoints++];
     point.x = 0;
     point.y = 0;
     point.brightness = 0;
@@ -136,7 +108,7 @@ void DisplayList::DebugDump() const
 #if 0//LOG_ENABLED
     for (uint32_t i = 0; i < m_numDisplayListVectors; ++i)
     {
-        const DisplayListVector& vector = m_pDisplayListVectors[i];
+        const Vector& vector = m_pDisplayListVectors[i];
         LOG_INFO("%d %d (%.3f, %.3f) (%.3f, %.3f)\n", i, vector.numSteps, (float)vector.x, (float)vector.y, (float)vector.dx,
                (float)vector.dy);
     }
@@ -145,11 +117,7 @@ void DisplayList::DebugDump() const
 
 static inline uint32_t scalarTo12bit(DisplayListIntermediate v)
 {
-#if USE_FIXED_POINT
     int32_t bits = v.getStorage() >> (DisplayListIntermediate::kNumFractionalBits - 12);
-#else
-    int32_t bits = (int32_t)(v * 4095.f);
-#endif
     return bits & 0xfff;
 }
 
@@ -159,14 +127,14 @@ void DisplayList::OutputToDACs()
     if(m_numDisplayListVectors > 1)
     {
         terminateVectors();
-        DisplayListVector* pItem = m_pDisplayListVectors;
-        DisplayListVector* pEnd = pItem + m_numDisplayListVectors;
+        Vector* pItem = m_pDisplayListVectors;
+        Vector* pEnd = pItem + m_numDisplayListVectors;
         DisplayListIntermediate x(0), y(0);
 
         DacOutput::SetCurrentPioSm(DacOutputSm::Vector());
         for (; pItem != pEnd; ++pItem)
         {
-            const DisplayListVector& vector = *pItem;
+            const Vector& vector = *pItem;
             uint32_t numSteps = vector.numSteps;
             if(numSteps > 8192) numSteps = 8192;
 #if STEP_DIV_IN_DISPLAY_LIST
@@ -209,7 +177,7 @@ void DisplayList::OutputToDACs()
         const uint32_t kRepeatCount = 1;
         for(uint32_t i = 0; i < kRepeatCount; ++i)
         {
-            DisplayListPoint* pPoint = m_pDisplayListPoints;
+            Point* pPoint = m_pDisplayListPoints;
             uint32_t numPointsRemaining = m_numDisplayListPoints;
 
             while(numPointsRemaining)
@@ -217,11 +185,11 @@ void DisplayList::OutputToDACs()
                 uint32_t numPointsInBatch;
                 uint32_t* pOutput = DacOutput::AllocateBufferSpace(numPointsRemaining, numPointsInBatch);
 
-                //DisplayListPoint* pEnd = pPoint + m_numDisplayListPoints;
+                //Point* pEnd = pPoint + m_numDisplayListPoints;
                 const uint32_t* pOutputEnd = pOutput + numPointsInBatch;
                 for (; pOutput != pOutputEnd; ++pPoint, ++pOutput)
                 {
-                    const DisplayListPoint& point = *pPoint;
+                    const Point& point = *pPoint;
                     uint32_t bitsX = point.x.getStorage() >> (point.x.kNumFractionalBits - 12);
                     uint32_t bitsY = point.y.getStorage() >> (point.y.kNumFractionalBits - 12);
                     uint32_t bits = bitsX | (bitsY << 12);

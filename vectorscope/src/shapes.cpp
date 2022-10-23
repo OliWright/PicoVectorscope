@@ -37,7 +37,7 @@ void PushShapeToDisplayList(DisplayList& displayList,
     FixedTransform2D::Vector2Type point0;
     transform.transformVector(point0, points[0]);
     pushVector(displayList, point0, Intensity(0.f));
-    Intensity burnBoost = 0;
+    BurnLength burnBoost = 0;
     FixedTransform2D::Vector2Type previousPoint = point0;
     for (uint i = 1; i < numPoints; ++i)
     {

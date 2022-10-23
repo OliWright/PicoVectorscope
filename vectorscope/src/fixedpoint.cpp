@@ -48,13 +48,17 @@ constexpr float kTestFloat4 = (float) kTestFixed3;
 
 constexpr FixedPoint_S1_14 kTestFixed5 = FixedPoint_S1_14(0.1f) * 0.1f;
 
+constexpr FixedPoint_S7_24 kTestFixed6 = Div<6>(FixedPoint_S7_24(63.f),  FixedPoint_S8_23(-2.f));
+constexpr float kTestFloat6 = (float) kTestFixed6;
+
 static_assert(equal(FixedPoint_S1_14(0.1f) * 0.1f, 0.01f), "");
 static_assert(equal(FixedPoint_S13_18(100.f).recip(), 0.01f), "");
 static_assert(equal(FixedPoint_S13_18(100.25f).frac(), 0.25f), "");
-//static_assert(equal(FixedPoint_S5_26(0.1f) * FixedPoint_S1_14(0.1f).recip(), 1.f), "");
+static_assert(equal(FixedPoint_S5_26(0.1f) * FixedPoint_S1_14(0.1f).recip(), 1.f), "");
 static_assert(equal(FixedPoint_S1_14(0.1f) + (FixedPoint_S1_14(0.8f / (float) 64) * 64), 0.9f), "");
 static_assert(equal(FixedPoint_S20_11(1.f / (float) 64) + (FixedPoint_S20_11(1.f / (float) 64) * 63), 1.f), "");
 static_assert(equal(Mul<6,2>(FixedPoint_S7_24(63.f), FixedPoint_S8_23(-2.f)), -126.f), "");
+static_assert(equal((FixedPoint_S7_24(63.f) / FixedPoint_S8_23(-2.f)), -31.5f), "");
 
 void TestFixedPoint()
 {
@@ -107,16 +111,16 @@ void TestFixedPoint()
     FixedPoint_S5_26 b = FixedPoint_S5_26(FixedPoint_S1_14(0.3f) - FixedPoint_S1_14(0.1f));
     LOG_INFO(FixedPointTesting, "b = %f (0.2)\n", (float)b);
 
-    b = FixedPoint_S5_26(FixedPoint_S1_14(1.f) / FixedPoint_S1_14(0.125f));
+    b = FixedPoint_S5_26(FixedPoint_S1_14(1.f) / FixedPoint_S13_18(0.125f));
     LOG_INFO(FixedPointTesting, "b = %f (8)\n", (float)b);
 
-    b = Div(FixedPoint_S5_26(1.f), FixedPoint_S5_26(8.f), 0, 0);
+    b = Div<1>(FixedPoint_S5_26(1.f), FixedPoint_S5_26(8.f));
     LOG_INFO(FixedPointTesting, "b = %f (0.125)\n", (float)b);
 
-    b = Div(FixedPoint_S5_26(1.f), FixedPoint_S5_26(8.f), 4, 1);
+    b = Div<1>(FixedPoint_S5_26(1.f), FixedPoint_S5_26(8.f));
     LOG_INFO(FixedPointTesting, "b = %f (0.125)\n", (float)b);
 
-    FixedPoint_S13_18 d = Div(FixedPoint_S13_18(1.f), FixedPoint_S13_18(8.f), 11, 4);
+    FixedPoint_S13_18 d = Div<1>(FixedPoint_S13_18(1.f), FixedPoint_S13_18(8.f));
     LOG_INFO(FixedPointTesting, "d = %f (0.125)\n", (float)d);
 
     LOG_INFO(FixedPointTesting, "s = %f (0.479)\n", (float)SinTable::LookUp(0.5f));
