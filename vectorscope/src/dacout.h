@@ -37,13 +37,26 @@ public:
         s_currentEntryIdx += outNumEntriesAllocated;
         return pBufferSpace;
     }
+
+    static inline uint32_t* AllocateBufferSpace(uint32_t numEntries)
+    {
+        // Do we have room in the current buffer?
+        if (numEntries > (kNumEntriesPerBuffer - s_currentEntryIdx))
+        {
+            // Let's move to the next buffer
+            Flush();
+        }
+        uint32_t* pBufferSpace = s_buffers[s_currentBufferIdx] + s_currentEntryIdx;
+        s_currentEntryIdx += numEntries;
+        return pBufferSpace;
+    }
     static void Flush(bool finalFlushForFrame = false);
     static void SetCurrentPioSm(const DacOutputPioSmConfig& config);
     static uint64_t GetFrameDurationUs() {return s_frameDurationUs;}
 
 private:
     constexpr static uint32_t kNumBuffers = 3;
-    constexpr static uint32_t kNumEntriesPerBuffer = 16384;
+    constexpr static uint32_t kNumEntriesPerBuffer = 4096;
 
     struct DmaChannel
     {

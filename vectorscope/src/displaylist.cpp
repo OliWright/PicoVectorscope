@@ -12,7 +12,10 @@
 
 #define SPEED_CONSTANT 2048
 
+static const uint kMaxRasterDisplays = 4;
+
 static LogChannel DisplayListSynchronisation(false);
+static LogChannel RasterInfo(false);
 
 DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
     : m_pDisplayListVectors((Vector*)malloc(maxNumItems * sizeof(Vector))),
@@ -20,7 +23,9 @@ DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
       m_maxDisplayListVectors(maxNumItems),
       m_pDisplayListPoints((Point*)malloc(maxNumPoints * sizeof(Point))),
       m_numDisplayListPoints(0),
-      m_maxDisplayListPoints(maxNumPoints)
+      m_maxDisplayListPoints(maxNumPoints),
+      m_rasterDisplays((RasterDisplay*)malloc(kMaxRasterDisplays * sizeof(RasterDisplay))),
+      m_numRasterDisplays(0)
 {
 #if !STEP_DIV_IN_DISPLAY_LIST
     static_assert(sizeof(Vector) == 6, "");
@@ -42,8 +47,8 @@ DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
     point.brightness = 1.f;
 }
 
-static DisplayListVector2 calibrationScale(1.f, 0.875f);
-static DisplayListVector2 calibrationBias(0.f, 0.0625f);
+static DisplayListVector2 calibrationScale(0.876f, 0.875f);
+static DisplayListVector2 calibrationBias(0.0625f, 0.0625f);
 
 void DisplayList::PushVector(DisplayListScalar x, DisplayListScalar y, Intensity intensity)
 {
@@ -79,6 +84,14 @@ void DisplayList::PushPoint(DisplayListScalar x, DisplayListScalar y, Intensity 
     }
 }
 
+void DisplayList::PushRasterDisplay(const RasterDisplay& rasterDisplay)
+{
+    if(m_numRasterDisplays >= kMaxRasterDisplays)
+    {
+        return;
+    }
+    m_rasterDisplays[m_numRasterDisplays++] = rasterDisplay;
+}
 
 void DisplayList::terminateVectors()
 {
@@ -121,9 +134,68 @@ static inline uint32_t scalarTo12bit(DisplayListIntermediate v)
     return bits & 0xfff;
 }
 
+static inline uint32_t scalarTo12bitNoWrap(DisplayListIntermediate v)
+{
+    return v.getStorage() >> (DisplayListIntermediate::kNumFractionalBits - 12);
+}
+
+static inline uint32_t scalarTo12bitClamped(DisplayListIntermediate v)
+{
+    int32_t bits = v.getStorage() >> (DisplayListIntermediate::kNumFractionalBits - 12);
+    return (bits > 0xfff) ? 0xfff : ((bits < 0) ? 0 : bits);
+}
+
 void DisplayList::OutputToDACs()
 {
     LOG_INFO(DisplayListSynchronisation, "DL: %d, %d\n", m_numDisplayListVectors, m_numDisplayListPoints);
+
+
+    for(uint32_t i = 0; i < m_numRasterDisplays; ++i)
+    {
+        DacOutput::SetCurrentPioSm(DacOutputSm::Raster());
+
+        const RasterDisplay& rasterDisplay = m_rasterDisplays[i];
+        DisplayListVector2 topLeft;
+        topLeft.x = (rasterDisplay.topLeft.x * calibrationScale.x) + calibrationBias.x;
+        topLeft.y = (rasterDisplay.topLeft.y * calibrationScale.y) + calibrationBias.y;
+        DisplayListVector2 bottomRight;
+        bottomRight.x = (rasterDisplay.bottomRight.x * calibrationScale.x) + calibrationBias.x;
+        bottomRight.y = (rasterDisplay.bottomRight.y * calibrationScale.y) + calibrationBias.y;
+        DisplayListIntermediate dx = (topLeft.x - bottomRight.x) / (int) rasterDisplay.width;
+        DisplayListIntermediate dy = (bottomRight.y - topLeft.y) / (int) rasterDisplay.height;
+        DisplayListIntermediate y = topLeft.y;
+        const uint32_t numEntriesToAllocatePerScanline = (rasterDisplay.width >> 1) + 1;
+        LOG_INFO(RasterInfo, "dx: %f, dy: %f, x12: %d\n", (float) dx, (float) dy, scalarTo12bit(bottomRight.x));
+        for(uint32_t scanlineIdx = 0; scanlineIdx < rasterDisplay.height; ++scanlineIdx)
+        {
+            uint16_t* pOutput = (uint16_t*) DacOutput::AllocateBufferSpace(numEntriesToAllocatePerScanline);
+            uint16_t* pEnd = pOutput + (numEntriesToAllocatePerScanline * 2);
+            DisplayListIntermediate x = bottomRight.x;
+            uint32_t x12 = scalarTo12bitClamped(x);
+            *(pOutput++) = (scalarTo12bit(y)   << 2) | 2; // Mode 0 : Set Y absolute
+            *(pOutput++) = (x12 << 2) | 1; // Mode 1 : Set X absolute
+            const uint8_t* end = rasterDisplay.scanlineCallback(scanlineIdx) - 1;
+            const uint8_t* pixel = end + rasterDisplay.width;
+            for(; pixel != end; --pixel)
+            {
+                x += dx;
+                uint32_t newX12 = scalarTo12bit(x);
+                uint32_t holdBits = *pixel >> 2;
+                *(pOutput++) = ((x12 - newX12) << 2) | (holdBits << 10); // Mode 0
+                x12 = newX12;
+            }
+
+            if(pOutput != pEnd)
+            {
+                LOG_INFO(RasterInfo, "Nope\n");
+            }
+
+            y += dy;
+        }
+
+    }
+
+
     if(m_numDisplayListVectors > 1)
     {
         terminateVectors();
@@ -225,5 +297,6 @@ void DisplayList::OutputToDACs()
         //LOG_INFO("Out Points End\n");
     }
 #endif
+
     DacOutput::Flush(true);
 }

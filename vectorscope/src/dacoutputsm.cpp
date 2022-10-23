@@ -2,9 +2,10 @@
 //#define LOG_ENABLED 0
 #include "log.h"
 
+#include "idle.pio.h"
 #include "vector.pio.h"
 #include "points.pio.h"
-#include "idle.pio.h"
+#include "raster.pio.h"
 
 DacOutputPioSmConfig DacOutputSm::s_configs[(int)DacOutputSm::SmID::eCount] = {};
 
@@ -13,14 +14,14 @@ struct ProgramInfo
     const pio_program_t* m_pProgram;
     uint m_wrapTarget;
     uint m_wrap;
-    PIO m_pio;
     uint m_numSidesetPins;
     uint16_t m_clockDivider;
 };
 static const ProgramInfo s_programInfo[] = {
-    {&idle_program,   idle_wrap_target,   idle_wrap,   pio0, 2, 32},
-    {&vector_program, vector_wrap_target, vector_wrap, pio0, 3, 3},
-    {&points_program, points_wrap_target, points_wrap, pio0, 2, 32},
+    {&idle_program,   idle_wrap_target,   idle_wrap,   2, 32},
+    {&vector_program, vector_wrap_target, vector_wrap, 3, 3},
+    {&points_program, points_wrap_target, points_wrap, 2, 32},
+    {&raster_program, raster_wrap_target, raster_wrap, 2, 1},
 };
 
 static uint s_overloadedStateMachine;
@@ -31,8 +32,9 @@ void DacOutputSm::configureSm(SmID smID)
     const ProgramInfo& programInfo = s_programInfo[(int)smID];
     DacOutputPioSmConfig& outConfig = s_configs[(int)smID];
 
-    outConfig.m_pio = programInfo.m_pio;
+    outConfig.m_pio = pio0;
     outConfig.m_pProgram = programInfo.m_pProgram;
+    outConfig.m_id = (uint32_t) smID;
 
     if(smID == SmID::eIdle)
     {

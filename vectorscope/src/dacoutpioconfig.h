@@ -13,6 +13,7 @@ struct DacOutputPioSmConfig
     bool m_overloaded;
     const pio_program_t* m_pProgram;
     pio_sm_config m_config;
+    uint32_t m_id;
 
     void SetEnabled(bool enabled) const;
 };

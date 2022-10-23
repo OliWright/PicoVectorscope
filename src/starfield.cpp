@@ -49,7 +49,6 @@ constexpr StarCoordIntermediate kTestStarScreenX = Mul<StarCoordScalar::kNumWhol
 constexpr float kTestStarScreenXFloat = (float) kTestStarScreenX;
 constexpr float kTestStarScreenXFloat2 = kTestStarCoordXFloat * kTestStarProjOverZFloat2 + 0.5f;
 
-//constexpr StarCoordIntermediate zeroBrightness = kNearZ * kRecipFarZ;
 constexpr StarCoordIntermediate zeroBrightness = Mul<StarCoordScalar::kNumWholeBits, -4, 12>(kNearZ, kRecipFarZ);
 constexpr StarCoordIntermediate brightness = Mul<StarCoordScalar::kNumWholeBits, -4, 9>(kNearZ, kTestStarRecipZ);//< 1.0 at kNearZ
 constexpr float zeroBrightnessFloat = (float) zeroBrightness;
@@ -66,7 +65,7 @@ static LogChannel StarDetails(false);
 class Starfield : public Demo
 {
 public:
-    Starfield() : Demo(-5) {}
+    Starfield() : Demo() {}
     void UpdateAndRender(DisplayList& displayList, float dt);
 };
 static Starfield s_starfield;

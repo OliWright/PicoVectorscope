@@ -60,6 +60,18 @@ public:
     // to be drawn so slowly that they're impractical.
     void PushPoint(DisplayListScalar x, DisplayListScalar y, Intensity intensity);
 
+    // *Experimental* Raster display
+    typedef const uint8_t* (*RasterScanlineCallback)(uint32_t scanline);
+    struct RasterDisplay
+    {
+        uint32_t width;
+        uint32_t height;
+        DisplayListVector2 topLeft = DisplayListVector2(0.f, 1.f);
+        DisplayListVector2 bottomRight = DisplayListVector2(1.f, 0.f);
+        RasterScanlineCallback scanlineCallback;
+    };
+    void PushRasterDisplay(const RasterDisplay& rasterDisplay);
+
 public:
     DisplayList(uint32_t maxNumItems = 8192, uint32_t maxNumPoints = 4096);
 
@@ -68,6 +80,7 @@ public:
     {
         m_numDisplayListVectors = 1;
         m_numDisplayListPoints  = 1;
+        m_numRasterDisplays = 0;
     }
 
     void DebugDump() const;
@@ -98,4 +111,7 @@ private:
     Point*   m_pDisplayListPoints;
     uint32_t m_numDisplayListPoints;
     uint32_t m_maxDisplayListPoints;
+
+    RasterDisplay* m_rasterDisplays;
+    uint32_t m_numRasterDisplays;
 };

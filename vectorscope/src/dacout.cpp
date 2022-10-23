@@ -222,7 +222,7 @@ void DacOutput::setActivePioSm(const DacOutputPioSmConfig& config)
 {
     if(s_activePioSmConfig != &config)
     {
-        LOG_INFO(DacOutputSynchronisation, "Switch SM: %d\n", config.m_stateMachine);
+        LOG_INFO(DacOutputSynchronisation, "Switch SM: %d\n", config.m_id);
         if(s_activePioSmConfig != nullptr)
         {
             // Wait for the current PIO SM to drain its FIFO
@@ -237,7 +237,7 @@ void DacOutput::setActivePioSm(const DacOutputPioSmConfig& config)
         // Turn on the new PIO SM
         config.SetEnabled(true);
         s_activePioSmConfig = &config;
-        LOG_INFO(DacOutputSynchronisation, "Done Switch SM: %d\n", config.m_stateMachine);
+        LOG_INFO(DacOutputSynchronisation, "Done Switch SM: %d\n", config.m_id);
     }
 }
 

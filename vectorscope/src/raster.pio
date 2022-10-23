@@ -1,0 +1,65 @@
+;
+; Write data out to parallel DACs
+;
+; Takes 16-bit words in the following format
+;
+; +--------------------------------------------------------------+
+; + 31 MSB                                                 LSB 0 +
+; +----------------------------------------------+---------------+
+; +            Mode specific data                + Mode (2-bits) +
+; +-----+---------------+------------------------+---------------+
+; +    Hold (6-bits)    +      X Dec(8-bits)     +     Mode 0    +
+; +---------------------+------------------------+---------------+
+; +     +               X (12-bits)              +     Mode 1    +
+; +-----+----------------------------------------+---------------+
+; +     +               Y (12-bits)              +     Mode 2    +
+; +-----+----------------------------------------+---------------+
+
+;
+; - Oli Wright 2022
+;
+
+.program raster
+.side_set 2 ; Latch triggers for x, y
+
+.wrap_target
+start:
+    // Shift out the 2 mode bits
+    out y, 2            side 3  [0]
+    jmp y-- test_mode_1 side 3  [0]
+
+mode_0:
+    // Shift out the 8-bits for how far to move the beam
+    out y, 8            side 3  [0]
+dec_loop:
+    jmp x-- dec_y       side 3  [0]
+dec_y:
+    jmp y-- dec_loop    side 3  [0]
+
+    mov pins, x         side 3  [3] // Delay to settle
+
+    // Shift out the 6-bits for the hold delay
+    out y, 6            side 2  [2]
+hold:
+    jmp y-- hold        side 2  [0]
+.wrap
+
+test_mode_1:
+    jmp y-- mode_2      side 3  [0]
+
+mode_1:
+    // Set the X register to an explicit value
+    out x, 12           side 3  [0]
+    // We have 2 spare bits in the 16-bit command
+    out y, 2            side 3  [0]
+    jmp start           side 3  [0]
+
+mode_2:
+    // Set the Y register to an explicit value
+    out pins, 12        side 3  [2] // Delay to settle
+    // We have 2 spare bits in the 16-bit command
+    out y, 2            side 1  [1]
+    jmp start           side 1  [0]
+
+
+
