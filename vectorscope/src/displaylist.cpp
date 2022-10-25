@@ -17,6 +17,10 @@ static const uint kMaxRasterDisplays = 4;
 static LogChannel DisplayListSynchronisation(false);
 static LogChannel RasterInfo(false);
 
+static const uint8_t s_pixelToHold[256] ={
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 15, 15, 15, 15, 15, 15, 15, 15, 16, 16, 16, 16 
+};
+
 DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
     : m_pDisplayListVectors((Vector*)malloc(maxNumItems * sizeof(Vector))),
       m_numDisplayListVectors(1),
@@ -47,7 +51,7 @@ DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
     point.brightness = 1.f;
 }
 
-static DisplayListVector2 calibrationScale(0.876f, 0.875f);
+static DisplayListVector2 calibrationScale(0.9375f, 0.875f);
 static DisplayListVector2 calibrationBias(0.0625f, 0.0625f);
 
 void DisplayList::PushVector(DisplayListScalar x, DisplayListScalar y, Intensity intensity)
@@ -161,34 +165,39 @@ void DisplayList::OutputToDACs()
         DisplayListVector2 bottomRight;
         bottomRight.x = (rasterDisplay.bottomRight.x * calibrationScale.x) + calibrationBias.x;
         bottomRight.y = (rasterDisplay.bottomRight.y * calibrationScale.y) + calibrationBias.y;
-        DisplayListIntermediate dx = (topLeft.x - bottomRight.x) / (int) rasterDisplay.width;
+        DisplayListIntermediate dx = (bottomRight.x - topLeft.x) / (int) rasterDisplay.width;
         DisplayListIntermediate dy = (bottomRight.y - topLeft.y) / (int) rasterDisplay.height;
         DisplayListIntermediate y = topLeft.y;
         const uint32_t numEntriesToAllocatePerScanline = (rasterDisplay.width >> 1) + 1;
-        LOG_INFO(RasterInfo, "dx: %f, dy: %f, x12: %d\n", (float) dx, (float) dy, scalarTo12bit(bottomRight.x));
+        //LOG_INFO(RasterInfo, "dx: %f, dy: %f, x12: %d\n", (float) dx, (float) dy, scalarTo12bit(bottomRight.x));
         for(uint32_t scanlineIdx = 0; scanlineIdx < rasterDisplay.height; ++scanlineIdx)
         {
-            uint16_t* pOutput = (uint16_t*) DacOutput::AllocateBufferSpace(numEntriesToAllocatePerScanline);
-            uint16_t* pEnd = pOutput + (numEntriesToAllocatePerScanline * 2);
-            DisplayListIntermediate x = bottomRight.x;
-            uint32_t x12 = scalarTo12bitClamped(x);
-            *(pOutput++) = (scalarTo12bit(y)   << 2) | 2; // Mode 0 : Set Y absolute
-            *(pOutput++) = (x12 << 2) | 1; // Mode 1 : Set X absolute
-            const uint8_t* end = rasterDisplay.scanlineCallback(scanlineIdx) - 1;
-            const uint8_t* pixel = end + rasterDisplay.width;
-            for(; pixel != end; --pixel)
+            uint16_t* pOutputStart = (uint16_t*) DacOutput::AllocateBufferSpace(numEntriesToAllocatePerScanline);
+            uint16_t* pOutput = pOutputStart;
+            //uint16_t* pEnd = pOutput + (numEntriesToAllocatePerScanline * 2);
+            DisplayListIntermediate x = topLeft.x;
+            *(pOutput++) = 0; 
+            *(pOutput++) = scalarTo12bit(y);
+            const uint8_t* pixel = rasterDisplay.scanlineCallback(scanlineIdx);
+            const uint8_t* end = pixel + rasterDisplay.width;
+            for(; pixel != end; ++pixel)
             {
                 x += dx;
-                uint32_t newX12 = scalarTo12bit(x);
-                uint32_t holdBits = *pixel >> 2;
-                *(pOutput++) = ((x12 - newX12) << 2) | (holdBits << 10); // Mode 0
-                x12 = newX12;
+                uint32_t hold = *pixel;//s_pixelToHold[*pixel];
+                if(hold != 0)
+                {
+                    *(pOutput++) = scalarTo12bitNoWrap(x) | ((hold - 1) << 12);
+                }
             }
 
-            if(pOutput != pEnd)
+            uint32_t num16BitEntriesUsed = pOutput - pOutputStart;
+            if(num16BitEntriesUsed & 1)
             {
-                LOG_INFO(RasterInfo, "Nope\n");
+                // We used an odd number
+                *(pOutput++) = 1;
+                ++num16BitEntriesUsed;
             }
+            DacOutput::GiveBackUnusedEntries(numEntriesToAllocatePerScanline - (num16BitEntriesUsed >> 1));
 
             y += dy;
         }

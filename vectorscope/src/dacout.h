@@ -50,6 +50,12 @@ public:
         s_currentEntryIdx += numEntries;
         return pBufferSpace;
     }
+
+    static inline void GiveBackUnusedEntries(uint32_t numEntries)
+    {
+        s_currentEntryIdx -= numEntries;
+    }
+
     static void Flush(bool finalFlushForFrame = false);
     static void SetCurrentPioSm(const DacOutputPioSmConfig& config);
     static uint64_t GetFrameDurationUs() {return s_frameDurationUs;}
