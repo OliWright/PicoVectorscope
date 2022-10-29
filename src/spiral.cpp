@@ -24,7 +24,7 @@ void Spiral::UpdateAndRender(DisplayList& displayList, float dt)
     {
         phase -= kPi * 2.f;
     }
-    float intensity = sinf(phase) * 0.5f + 0.5f;
+    Intensity intensity = SinTable::LookUp(phase) * 0.5f + 0.5f;
     intensity = 0.5f;
 
     constexpr uint32_t kCount = 15;

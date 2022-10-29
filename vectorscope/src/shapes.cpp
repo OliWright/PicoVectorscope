@@ -1,6 +1,5 @@
 #include "shapes.h"
 #include "sintable.h"
-
 #include "transform2d.h"
 
 static constexpr uint kBurnFadeLength = 8;

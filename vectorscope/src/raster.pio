@@ -44,9 +44,9 @@ start:
     // high for at least 4 cycles for the value to settle.
     mov pins, x         side 3  [1]
     // Shift out the 4-bits for the hold delay
-    out x, 4            side 3  [0]
+    out y, 4            side 3  [0]
 
-    jmp x-- hold        side 3  [0] // Jump to the hold loop if we're holding
+    jmp y-- hold        side 3  [0] // Jump to the hold loop if we're holding
 
     // From now on, we pull the X-DAC CS pin low, latching
     // in the new X coordinate.
@@ -60,7 +60,7 @@ start:
     // This delay is linear.
     // It would be better if we could make it non-linear somehow.
 hold:
-    jmp x-- hold        side 2  [5]
+    jmp y-- hold        side 2  [5]
 
 next_x:
     // Shift out the next 12 x bits
@@ -71,12 +71,20 @@ next_x:
 
 set_y:
     // Drain the 4 unused bits in the 16-bit command
-    out x, 4            side 3  [0]
+    out y, 4            side 3  [0]
+    // Make sure they were zero too
+    jmp !y really_set_y side 3  [0]
+    // They weren't!  This was actually an x value of zero.  Oh well.
+    jmp start           side 3  [0]
+really_set_y:   
     // Read the y coord 
     out pins, 12        side 3  [3] // Delay to settle
     // Drain the 4 unused bits in the 16-bit command
-    out x, 4            side 1  [2]
+    out y, 4            side 1  [2]
     jmp start           side 1  [0]
+
+oops:
+
 
 
 

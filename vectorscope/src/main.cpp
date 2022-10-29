@@ -30,6 +30,7 @@ static float s_dt = (float) s_numMicrosBetweenFrames / 1000000.f;
 
 static LogChannel FrameSynchronisation(false);
 static LogChannel Events(true);
+static LogChannel ButtonFeedback(true);
 
 static inline uint32_t floatToOut(const float v)
 {
@@ -79,12 +80,29 @@ Demo::Demo(int order, int m_targetRefreshRate)
 
 void checkButton()
 {
+    if(Buttons::IsJustPressed(Buttons::Id::Left))
+    {
+        LOG_INFO(ButtonFeedback, "Left\n");
+    }
+    if(Buttons::IsJustPressed(Buttons::Id::Right))
+    {
+        LOG_INFO(ButtonFeedback, "Right\n");
+    }
+    if(Buttons::IsJustPressed(Buttons::Id::Thrust))
+    {
+        LOG_INFO(ButtonFeedback, "Thrust\n");
+    }
+    if(Buttons::IsJustPressed(Buttons::Id::Fire))
+    {
+        LOG_INFO(ButtonFeedback, "Fire\n");
+    }
     if((Buttons::HoldTimeMs(Buttons::Id::Left) > 500) && (Buttons::HoldTimeMs(Buttons::Id::Right) > 500) && Buttons::IsJustPressed(Buttons::Id::Fire))
     {
         if(++coolDemoIdx == s_numDemos)
         {
             coolDemoIdx = 0;
         }
+        LOG_INFO(ButtonFeedback, "Changing to demo %d\n", coolDemoIdx);
         initRefreshRate(*s_demos[coolDemoIdx]);
     }
     switch(Serial::GetLastCharIn())
@@ -212,8 +230,8 @@ int main()
 
     TestFixedPoint();
 
-    DacOutputSm::Init();
-    DacOutput::Init(DacOutputSm::Idle());
+    DacOutputPioSm::Init();
+    DacOutput::Init(DacOutputPioSm::Idle());
     mutex_init(displayListMutex + 0);
     mutex_init(displayListMutex + 1);
 
@@ -244,7 +262,7 @@ int main()
     }
     uint32_t* pBuffer;
     // int squareAmp = 2047;
-    DacOutput::SetCurrentPioSm(DacOutputSm::Vector());
+    DacOutput::SetCurrentPioSm(DacOutputPioSm::Vector());
     while (true)
     {
 #    if 0

@@ -43,7 +43,6 @@ void TestCard::UpdateAndRender(DisplayList& displayList, float dt)
     }
 
     FixedTransform2D transform;
-    FloatVector2 centre(0.5f, 0.5f);
 
     transform.setAsScale(0.05f);
     transform.translate(FixedTransform2D::Vector2Type(0.1f, 0.9f));

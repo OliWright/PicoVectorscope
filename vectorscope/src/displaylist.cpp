@@ -4,11 +4,7 @@
 #include "dacout.h"
 #include "dacoutputsm.h"
 #include "pico/assert.h"
-#include "pico/stdlib.h"
-#include "pico/float.h"
-
-#include <math.h>
-#include <stdio.h>
+#include <cstdlib>
 
 #define SPEED_CONSTANT 2048
 
@@ -156,7 +152,7 @@ void DisplayList::OutputToDACs()
 
     for(uint32_t i = 0; i < m_numRasterDisplays; ++i)
     {
-        DacOutput::SetCurrentPioSm(DacOutputSm::Raster());
+        DacOutput::SetCurrentPioSm(DacOutputPioSm::Raster());
 
         const RasterDisplay& rasterDisplay = m_rasterDisplays[i];
         DisplayListVector2 topLeft;
@@ -168,36 +164,80 @@ void DisplayList::OutputToDACs()
         DisplayListIntermediate dx = (bottomRight.x - topLeft.x) / (int) rasterDisplay.width;
         DisplayListIntermediate dy = (bottomRight.y - topLeft.y) / (int) rasterDisplay.height;
         DisplayListIntermediate y = topLeft.y;
-        const uint32_t numEntriesToAllocatePerScanline = (rasterDisplay.width >> 1) + 1;
+        const uint32_t num32BitEntriesToAllocatePerScanline = ((rasterDisplay.width + 1) >> 1) + 1;
         //LOG_INFO(RasterInfo, "dx: %f, dy: %f, x12: %d\n", (float) dx, (float) dy, scalarTo12bit(bottomRight.x));
         for(uint32_t scanlineIdx = 0; scanlineIdx < rasterDisplay.height; ++scanlineIdx)
         {
-            uint16_t* pOutputStart = (uint16_t*) DacOutput::AllocateBufferSpace(numEntriesToAllocatePerScanline);
+            uint16_t* pOutputStart = (uint16_t*) DacOutput::AllocateBufferSpace(num32BitEntriesToAllocatePerScanline);
             uint16_t* pOutput = pOutputStart;
             //uint16_t* pEnd = pOutput + (numEntriesToAllocatePerScanline * 2);
             DisplayListIntermediate x = topLeft.x;
             *(pOutput++) = 0; 
             *(pOutput++) = scalarTo12bit(y);
-            const uint8_t* pixel = rasterDisplay.scanlineCallback(scanlineIdx);
-            const uint8_t* end = pixel + rasterDisplay.width;
-            for(; pixel != end; ++pixel)
+
+            switch(rasterDisplay.mode)
             {
-                x += dx;
-                uint32_t hold = *pixel;//s_pixelToHold[*pixel];
-                if(hold != 0)
+                case RasterDisplay::Mode::e1Bit:
                 {
-                    *(pOutput++) = scalarTo12bitNoWrap(x) | ((hold - 1) << 12);
+                    const uint8_t* pixel = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
+                    const uint8_t* end = pixel + ((rasterDisplay.width + 7) >> 3);
+                    const uint16_t holdBits = 15 << 12;
+                    for(; pixel != end; ++pixel)
+                    {
+                        uint8_t pixelBlock = *pixel;
+                        for(uint bitIdx = 0; bitIdx < 8; ++bitIdx)
+                        {
+                            x += dx;
+                            if((pixelBlock & (0x80 >> bitIdx)) != 0)
+                            {
+                                *(pOutput++) = scalarTo12bitNoWrap(x) | holdBits;
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                case RasterDisplay::Mode::e4BitLinear:
+                {
+                    const uint8_t* pixel = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
+                    const uint8_t* end = pixel + rasterDisplay.width;
+                    for(; pixel != end; ++pixel)
+                    {
+                        x += dx;
+                        uint32_t hold = *pixel;//s_pixelToHold[*pixel];
+                        if(hold != 0)
+                        {
+                            *(pOutput++) = scalarTo12bitNoWrap(x) | ((hold - 1) << 12);
+                        }
+                    }
+                    break;
+                }
+
+                case RasterDisplay::Mode::e8BitGamma:
+                {
+                    const uint8_t* pixel = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
+                    const uint8_t* end = pixel + rasterDisplay.width;
+                    for(; pixel != end; ++pixel)
+                    {
+                        x += dx;
+                        uint32_t hold = s_pixelToHold[*pixel];
+                        if(hold != 0)
+                        {
+                            *(pOutput++) = scalarTo12bitNoWrap(x) | ((hold - 1) << 12);
+                        }
+                    }
+                    break;
                 }
             }
 
             uint32_t num16BitEntriesUsed = pOutput - pOutputStart;
             if(num16BitEntriesUsed & 1)
             {
-                // We used an odd number
+                // We used an odd number.  Add an inert output to make it even.
                 *(pOutput++) = 1;
                 ++num16BitEntriesUsed;
             }
-            DacOutput::GiveBackUnusedEntries(numEntriesToAllocatePerScanline - (num16BitEntriesUsed >> 1));
+            DacOutput::GiveBackUnusedEntries(num32BitEntriesToAllocatePerScanline - (num16BitEntriesUsed >> 1));
 
             y += dy;
         }
@@ -212,7 +252,7 @@ void DisplayList::OutputToDACs()
         Vector* pEnd = pItem + m_numDisplayListVectors;
         DisplayListIntermediate x(0), y(0);
 
-        DacOutput::SetCurrentPioSm(DacOutputSm::Vector());
+        DacOutput::SetCurrentPioSm(DacOutputPioSm::Vector());
         for (; pItem != pEnd; ++pItem)
         {
             const Vector& vector = *pItem;
@@ -254,7 +294,7 @@ void DisplayList::OutputToDACs()
         //LOG_INFO("Out Points Start\n");
         terminatePoints();
         terminatePoints();
-        DacOutput::SetCurrentPioSm(DacOutputSm::Points());
+        DacOutput::SetCurrentPioSm(DacOutputPioSm::Points());
         const uint32_t kRepeatCount = 1;
         for(uint32_t i = 0; i < kRepeatCount; ++i)
         {

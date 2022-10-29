@@ -1,9 +1,6 @@
 #include "picovectorscope.h"
 
-//#include "image.hpp"
 #include "rickroll.hpp"
-
-#define DIR 0
 
 static constexpr uint32_t kWidth = 300;
 static constexpr uint32_t kHeight = 200;
@@ -11,16 +8,16 @@ static constexpr uint32_t kHeight = 200;
 static uint8_t s_bitmapDisplay[kHeight][kWidth] = {};
 static DisplayList::RasterDisplay s_rasterDisplay;
 
-class Raster : public Demo
+class Rickroll : public Demo
 {
 public:
-    Raster() : Demo(-1) {}
+    Rickroll() : Demo() {}
     void Init();
     void UpdateAndRender(DisplayList& displayList, float dt);
 };
-static Raster s_raster;
+static Rickroll s_rickroll;
 
-static const uint8_t* scanlineCallback(uint32_t scanline)
+static const uint8_t* scanlineCallback(uint32_t scanline, void*)
 {
     return s_bitmapDisplay[scanline];
     //return s_image[scanline];
@@ -122,14 +119,15 @@ static void decompressVideoFrame(uint32_t frameIdx)
     }
 }
 
-void Raster::Init()
+void Rickroll::Init()
 {
     s_rasterDisplay.width = kWidth;
     s_rasterDisplay.height = kHeight;
+    s_rasterDisplay.mode = DisplayList::RasterDisplay::Mode::e4BitLinear;
     s_rasterDisplay.scanlineCallback = scanlineCallback;
 }
 
-void Raster::UpdateAndRender(DisplayList& displayList, float dt)
+void Rickroll::UpdateAndRender(DisplayList& displayList, float dt)
 {
     displayList.PushRasterDisplay(s_rasterDisplay);
 

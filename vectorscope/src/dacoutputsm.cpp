@@ -7,7 +7,7 @@
 #include "points.pio.h"
 #include "raster.pio.h"
 
-DacOutputPioSmConfig DacOutputSm::s_configs[(int)DacOutputSm::SmID::eCount] = {};
+DacOutputPioSmConfig DacOutputPioSm::s_configs[(int)DacOutputPioSm::SmID::eCount] = {};
 
 struct ProgramInfo
 {
@@ -27,7 +27,7 @@ static const ProgramInfo s_programInfo[] = {
 static uint s_overloadedStateMachine;
 static uint s_overloadedProgramOffset = 0;
 
-void DacOutputSm::configureSm(SmID smID)
+void DacOutputPioSm::configureSm(SmID smID)
 {
     const ProgramInfo& programInfo = s_programInfo[(int)smID];
     DacOutputPioSmConfig& outConfig = s_configs[(int)smID];
@@ -87,7 +87,7 @@ void DacOutputSm::configureSm(SmID smID)
     }
 }
 
-void DacOutputSm::Init()
+void DacOutputPioSm::Init()
 {
     // Associate all the pins we're going to use with the PIO
     for (uint i = 0; i < kNumDacOutDacPins; ++i)

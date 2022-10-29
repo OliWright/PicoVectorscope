@@ -21,6 +21,8 @@
 #pragma once
 
 #include "pico/stdlib.h"
+#include <cstdlib>
+
 #include "buttons.h"
 #include "demo.h"
 #include "displaylist.h"

@@ -61,13 +61,24 @@ public:
     void PushPoint(DisplayListScalar x, DisplayListScalar y, Intensity intensity);
 
     // *Experimental* Raster display
-    typedef const uint8_t* (*RasterScanlineCallback)(uint32_t scanline);
+    typedef const uint8_t* (*RasterScanlineCallback)(uint32_t scanline, void* userData);
     struct RasterDisplay
     {
         uint32_t width;
         uint32_t height;
+        enum class Mode
+        {
+            // 8 horizontal pixels packed into each byte, MSB to the left
+            e1Bit,
+            // 1 byte per pixel, but only the bottom nybble is used
+            e4BitLinear,
+            // 1 byte per pixel, traditional gamma2-ish, converted to 4-bit
+            // for output.
+            e8BitGamma,
+        } mode = Mode::e8BitGamma;
         DisplayListVector2 topLeft = DisplayListVector2(0.f, 1.f);
         DisplayListVector2 bottomRight = DisplayListVector2(1.f, 0.f);
+        void* userData = nullptr;
         RasterScanlineCallback scanlineCallback;
     };
     void PushRasterDisplay(const RasterDisplay& rasterDisplay);
