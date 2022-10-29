@@ -17,6 +17,7 @@
 // If not, see <https://www.gnu.org/licenses/>.
 //
 // oli.wright.github@gmail.com
+
 // Use the static class methods SinTable::Lookup and SinTable::SinCos
 
 #pragma once

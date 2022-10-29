@@ -30,6 +30,11 @@ public:
 
 protected:
     LookUpTableBase(uint32_t valueSize, uint32_t numValues, bool wrapped, Index endIndex);
+
+    // The base class doesn't know how to interpolate between the value type.
+    // This helper will output pointers to the two values that need interpolating
+    // between, and it will return the fractional interpolation value that should
+    // be used.
     Index LookUp(Index lookupIndex, void*& outA, void*& outB) const;
 
     void*                                         m_table;
@@ -57,9 +62,12 @@ public:
     // Lookup a value from the table, with interpolation.
     ValueType LookUp(LookUpTableBase::Index index) const
     {
+        // Use LookUpTableBase::LookUp to give us the two values that
+        // require interpolation
         void*            pA;
         void*            pB;
         Index            interpolation = LookUpTableBase::LookUp(index, pA, pB);
+        // Interpolate
         const ValueType& a             = *(const ValueType*)pA;
         const ValueType& b             = *(const ValueType*)pB;
         return ((b - a) * (ValueType)interpolation) + a;

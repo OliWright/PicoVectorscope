@@ -1,7 +1,26 @@
+// Text drawing helpers.
+//
+// Copyright (C) 2022 Oli Wright
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// A copy of the GNU General Public License can be found in the file
+// LICENSE.txt in the root of this project.
+// If not, see <https://www.gnu.org/licenses/>.
+//
+// oli.wright.github@gmail.com
+
 #include "text.h"
 
 #include "shapes.h"
-
 
 struct CompactVector
 {
@@ -226,11 +245,12 @@ static const CompactVector s_characterVectors[] = {
 };
 
 static const uint16_t s_characters[][2] = {
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 },
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 },
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 },
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 },
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 128, 4 }, // 0
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 128, 4 }, // 0
     { 132, 2 }, // 1
     { 134, 6 }, // 2
     { 140, 5 }, // 3
@@ -240,7 +260,7 @@ static const uint16_t s_characters[][2] = {
     { 160, 3 }, // 7
     { 163, 6 }, // 8
     { 169, 5 }, // 9
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 6 }, // A
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 6 }, // A
     { 6, 11 }, // B
     { 17, 4 }, // C
     { 21, 6 }, // D
@@ -266,15 +286,16 @@ static const uint16_t s_characters[][2] = {
     { 116, 3 }, // X
     { 119, 5 }, // Y
     { 124, 4 }, // Z
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 },
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 },
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 },
-    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 },   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 },
+    { 0, 0 },
 };
 
 static int32_t calcXOffset(const char* message, bool centre)
 {
-    if(!centre)
+    if (!centre)
     {
         return 0;
     }
@@ -287,12 +308,17 @@ static int32_t calcXOffset(const char* message, bool centre)
     return x_offset;
 }
 
-static bool processChar(const uint8_t* chr, int32_t& x_offset, int32_t& y_offset, const CompactVector*& vector, const CompactVector*& end, bool centre)
+static bool processChar(const uint8_t*        chr,
+                        int32_t&              x_offset,
+                        int32_t&              y_offset,
+                        const CompactVector*& vector,
+                        const CompactVector*& end,
+                        bool                  centre)
 {
     uint32_t ascii_code = *chr;
     if (ascii_code == '\n')
     {
-        x_offset = calcXOffset((const char*)chr+1, centre);
+        x_offset = calcXOffset((const char*)chr + 1, centre);
         y_offset -= 10;
         return false;
     }
@@ -302,15 +328,20 @@ static bool processChar(const uint8_t* chr, int32_t& x_offset, int32_t& y_offset
         return false;
     }
     vector = s_characterVectors + s_characters[ascii_code][0];
-    end = vector + s_characters[ascii_code][1];
+    end    = vector + s_characters[ascii_code][1];
     return vector != end;
 }
 
 
-void TextPrint(DisplayList& displayList, const FixedTransform2D& transform, const char* message, Intensity intensity, BurnLength burnLength, bool centre)
+void TextPrint(DisplayList&            displayList,
+               const FixedTransform2D& transform,
+               const char*             message,
+               Intensity               intensity,
+               BurnLength              burnLength,
+               bool                    centre)
 {
     constexpr uint32_t kMaxPoints = 8;
-    ShapeVector2 points[kMaxPoints];
+    ShapeVector2       points[kMaxPoints];
 
     int32_t x_offset = calcXOffset(message, centre);
     int32_t y_offset = -7;
@@ -318,12 +349,12 @@ void TextPrint(DisplayList& displayList, const FixedTransform2D& transform, cons
     {
         const CompactVector* vector;
         const CompactVector* end;
-        if(!processChar(chr, x_offset, y_offset, vector, end, centre))
+        if (!processChar(chr, x_offset, y_offset, vector, end, centre))
         {
             continue;
         }
-        points[0].x = ((float)x_offset) * 0.166f;
-        points[0].y = ((float)y_offset) * 0.166f;
+        points[0].x    = ((float)x_offset) * 0.166f;
+        points[0].y    = ((float)y_offset) * 0.166f;
         uint numPoints = 1;
         while (vector != end)
         {
@@ -332,9 +363,10 @@ void TextPrint(DisplayList& displayList, const FixedTransform2D& transform, cons
                 // Flush the current shape
                 if (numPoints > 1)
                 {
-                    PushShapeToDisplayList(displayList, points, numPoints, intensity, false, transform, burnLength);
+                    PushShapeToDisplayList(
+                        displayList, points, numPoints, intensity, false, transform, burnLength);
                     burnLength -= BurnLength(numPoints - 1);
-                    if(burnLength < 0)
+                    if (burnLength < 0)
                     {
                         return;
                     }
@@ -346,9 +378,10 @@ void TextPrint(DisplayList& displayList, const FixedTransform2D& transform, cons
             ++numPoints;
             ++vector;
         }
-        PushShapeToDisplayList(displayList, points, numPoints, intensity, false, transform, burnLength);
+        PushShapeToDisplayList(
+            displayList, points, numPoints, intensity, false, transform, burnLength);
         burnLength -= BurnLength(numPoints - 1);
-        if(burnLength < 0)
+        if (burnLength < 0)
         {
             return;
         }
@@ -361,9 +394,9 @@ BurnLength CalcBurnLength(const char* message)
     BurnLength burnLength = 0;
     for (const uint8_t* chr = (uint8_t*)message; *chr != 0; ++chr)
     {
-        uint32_t ascii_code = *chr;
-        const CompactVector* vector = s_characterVectors + s_characters[ascii_code][0];
-        const CompactVector* end = vector + s_characters[ascii_code][1];
+        uint32_t             ascii_code = *chr;
+        const CompactVector* vector     = s_characterVectors + s_characters[ascii_code][0];
+        const CompactVector* end        = vector + s_characters[ascii_code][1];
         while (vector != end)
         {
             if (vector->onOff != 0)
@@ -376,21 +409,23 @@ BurnLength CalcBurnLength(const char* message)
     return burnLength + 3;
 }
 
-void CalcTextTransform(const DisplayListVector2& pos, const DisplayListScalar& scale, FixedTransform2D& outTranform)
+void CalcTextTransform(const DisplayListVector2& pos,
+                       const DisplayListScalar&  scale,
+                       FixedTransform2D&         outTranform)
 {
     outTranform.setAsScale(scale);
     outTranform.setTranslation(FixedTransform2D::Vector2Type(pos.x, pos.y));
 }
 
-uint32_t FragmentText(const char* message,
+uint32_t FragmentText(const char*             message,
                       const FixedTransform2D& transform,
-                      Fragment* outFragments,
-                      uint32_t outFragmentsCapacity,
-                      bool centre)
+                      Fragment*               outFragments,
+                      uint32_t                outFragmentsCapacity,
+                      bool                    centre)
 {
     constexpr uint32_t kMaxPoints = 8;
-    ShapeVector2 points[kMaxPoints];
-    uint32_t numFragments = 0;
+    ShapeVector2       points[kMaxPoints];
+    uint32_t           numFragments = 0;
 
     int32_t x_offset = calcXOffset(message, centre);
     int32_t y_offset = -7;
@@ -398,12 +433,12 @@ uint32_t FragmentText(const char* message,
     {
         const CompactVector* vector;
         const CompactVector* end;
-        if(!processChar(chr, x_offset, y_offset, vector, end, centre))
+        if (!processChar(chr, x_offset, y_offset, vector, end, centre))
         {
             continue;
         }
-        points[0].x = ((float)x_offset) * 0.166f;
-        points[0].y = ((float)y_offset) * 0.166f;
+        points[0].x    = ((float)x_offset) * 0.166f;
+        points[0].y    = ((float)y_offset) * 0.166f;
         uint numPoints = 1;
         while (vector != end)
         {
@@ -412,10 +447,12 @@ uint32_t FragmentText(const char* message,
                 // Flush the current shape
                 if (numPoints > 1)
                 {
-                    numFragments += FragmentShape(points, numPoints, false, transform, outFragments + numFragments, outFragmentsCapacity - numFragments);
+                    numFragments += FragmentShape(points, numPoints, false, transform,
+                                                  outFragments + numFragments,
+                                                  outFragmentsCapacity - numFragments);
                 }
                 numPoints = 0;
-                if(numFragments >= outFragmentsCapacity)
+                if (numFragments >= outFragmentsCapacity)
                 {
                     break;
                 }
@@ -425,8 +462,10 @@ uint32_t FragmentText(const char* message,
             ++numPoints;
             ++vector;
         }
-        numFragments += FragmentShape(points, numPoints, false, transform, outFragments + numFragments, outFragmentsCapacity - numFragments);
-        if(numFragments >= outFragmentsCapacity)
+        numFragments
+            += FragmentShape(points, numPoints, false, transform, outFragments + numFragments,
+                             outFragmentsCapacity - numFragments);
+        if (numFragments >= outFragmentsCapacity)
         {
             break;
         }
