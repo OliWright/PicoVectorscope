@@ -64,8 +64,8 @@ Demo::Demo(int order, int m_targetRefreshRate)
     : m_order(order), m_targetRefreshRate(m_targetRefreshRate)
 {
     // A simple inserstion sort keeps the Demos in their priority order
-    uint demoInsertion = 0;
-    for (; demoInsertion < s_numDemos; ++demoInsertion)
+    int demoInsertion = 0;
+    for (; demoInsertion < (int) s_numDemos; ++demoInsertion)
     {
         if (order < s_demos[demoInsertion]->m_order)
         {
@@ -73,7 +73,7 @@ Demo::Demo(int order, int m_targetRefreshRate)
         }
     }
     ++s_numDemos;
-    for (uint i = s_numDemos - 1; i > demoInsertion; ++i)
+    for (int i = s_numDemos - 1; i > demoInsertion; --i)
     {
         s_demos[i] = s_demos[i - 1];
     }
