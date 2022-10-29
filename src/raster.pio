@@ -96,8 +96,12 @@ really_set_y:
     // Read the y coord 
     out pins, 12        side 3  [3] // Delay to settle
     // Drain the 4 unused bits in the 16-bit command
-    out y, 4            side 1  [2]
-    jmp start           side 1  [0]
+    out y, 4            side 1  [3]
+    // Set X to zero to do horizontal blank.
+    // The DACs need a bit longer to settle for large changes
+    mov pins, NULL      side 3  [3]
+    nop                 side 2  [7]
+    jmp start           side 2  [7]
 
 oops:
 

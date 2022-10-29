@@ -108,9 +108,15 @@ TileMap::TileMap(Mode                      mode,
     }
 }
 
+static int32_t mod(int32_t a, int32_t b)
+{
+    const int32_t r = a % b;
+    return (r < 0) ? (r + b) : r;
+}
+
 const uint8_t* TileMap::createScanline(int32_t scanline)
 {
-    int32_t pixelRow = (m_scrollOffsetPixelsY + scanline) % m_heightPixels;
+    int32_t pixelRow = mod((m_scrollOffsetPixelsY + scanline), m_heightPixels);
     int32_t tileRow = pixelRow >> m_tileHeightLog2;
     if(m_cachedRow != tileRow)
     {
@@ -118,7 +124,7 @@ const uint8_t* TileMap::createScanline(int32_t scanline)
         m_cachedRowTiles = m_rowCallback(tileRow);
     }
 
-    int32_t startPixel = m_scrollOffsetPixelsX % m_widthPixels;
+    int32_t startPixel = mod(m_scrollOffsetPixelsX, m_widthPixels);
     int32_t rowWithinTile = pixelRow & ((1 << m_tileHeightLog2) - 1);
     if((startPixel + m_visibleWidthPixels) > m_widthPixels)
     {
@@ -178,9 +184,8 @@ static uint8_t get1BitTileRowByte(uint32_t tileIdx, int32_t tilePixelRow)
 
 void TileMap::fill1BitPixelSpan(int32_t srcPixelIdx, int32_t dstPixelIdx, int32_t tilePixelRow, int32_t count) const
 {
-    int32_t srcByteIdx = srcPixelIdx >> 3;
-    int32_t dstByteIdx = dstPixelIdx >> 3;
-    uint8_t* dstByte = m_scanline + dstByteIdx;
+    const uint8_t* srcByte = m_cachedRowTiles + (srcPixelIdx >> 3);
+    uint8_t* dstByte = m_scanline + (dstPixelIdx >> 3);
 
     // Bit indices here are left to right (MSB to LSB) rather than
     // the more usual right to left when dealing with arithmetic.
@@ -189,23 +194,19 @@ void TileMap::fill1BitPixelSpan(int32_t srcPixelIdx, int32_t dstPixelIdx, int32_
     assert((srcBitIdx == 0) || (dstBitIdx == 0));
 
     // Let's deal with the first few pixels in order to get the destination pixel byte-aligned
-    uint8_t tileByte;
+    uint8_t tileByte = get1BitTileRowByte(*srcByte, tilePixelRow);
     if((dstPixelIdx & 7) != 0)
     {
-        tileByte = get1BitTileRowByte(m_cachedRowTiles[srcByteIdx], tilePixelRow);
-
         uint8_t dstMask = 0xff >> dstBitIdx;
         uint8_t dstByteValue = *dstByte;
-        dstByteValue &= dstMask;
+        dstByteValue &= ~dstMask;
         dstByteValue |= (tileByte >> dstBitIdx);
+        *dstByte++ = dstByteValue;
 
         // Advance
         int32_t numPixelsHandled = 8 - dstBitIdx;
         srcPixelIdx += numPixelsHandled;
         dstPixelIdx += numPixelsHandled;
-        ++dstByteIdx;
-        ++dstByte;
-        srcByteIdx = srcPixelIdx >> 3;
         srcBitIdx = srcPixelIdx & 7;
         dstBitIdx = 0;
         count -= numPixelsHandled;
@@ -220,17 +221,18 @@ void TileMap::fill1BitPixelSpan(int32_t srcPixelIdx, int32_t dstPixelIdx, int32_
         // This is the easy case.
         while(dstByte != dstByteEnd)
         {
-            tileByte = get1BitTileRowByte(m_cachedRowTiles[srcByteIdx++], tilePixelRow);
+            tileByte = get1BitTileRowByte(*srcByte++, tilePixelRow);
             *dstByte++ = tileByte;
         }
     }
     else
     {
+        ++srcByte;
         while(dstByte != dstByteEnd)
         {
-            uint8_t dstByteValue = tileByte << (8 - srcBitIdx);
-            tileByte = get1BitTileRowByte(m_cachedRowTiles[srcByteIdx++], tilePixelRow);
-            dstByteValue |= tileByte >> srcBitIdx;
+            uint8_t dstByteValue = tileByte << srcBitIdx;
+            tileByte = get1BitTileRowByte(*srcByte++, tilePixelRow);
+            dstByteValue |= tileByte >> (8 - srcBitIdx);
             *dstByte++ = dstByteValue;
         }
     }
