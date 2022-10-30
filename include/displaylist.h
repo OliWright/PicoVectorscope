@@ -80,6 +80,7 @@ public:
         DisplayListVector2 bottomRight = DisplayListVector2(1.f, 0.f);
         void* userData = nullptr;
         RasterScanlineCallback scanlineCallback;
+        uint32_t horizontalScrollOffset = 0;
     };
     void PushRasterDisplay(const RasterDisplay& rasterDisplay);
 

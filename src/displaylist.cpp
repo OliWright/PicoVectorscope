@@ -230,12 +230,13 @@ void DisplayList::OutputToDACs()
             {
                 const uint8_t* pixel
                     = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
-                const uint8_t* end      = pixel + ((rasterDisplay.width + 7) >> 3);
+                const uint8_t* end      = pixel + ((rasterDisplay.width + 7 + rasterDisplay.horizontalScrollOffset) >> 3);
                 const uint16_t holdBits = 15 << 12;
+                uint bitStart = rasterDisplay.horizontalScrollOffset;
                 for (; pixel != end; ++pixel)
                 {
                     uint8_t pixelBlock = *pixel;
-                    for (uint bitIdx = 0; bitIdx < 8; ++bitIdx)
+                    for (uint bitIdx = bitStart; bitIdx < 8; ++bitIdx)
                     {
                         x += dx;
                         if ((pixelBlock & (0x80 >> bitIdx)) != 0)
@@ -243,6 +244,7 @@ void DisplayList::OutputToDACs()
                             *(pOutput++) = scalarTo12bitNoWrap(x) | holdBits;
                         }
                     }
+                    bitStart = 0;
                 }
                 break;
             }

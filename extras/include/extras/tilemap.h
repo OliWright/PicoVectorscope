@@ -41,7 +41,7 @@ public:
             const DisplayListVector2& topLeft     = DisplayListVector2(0.f, 1.f),
             const DisplayListVector2& bottomRight = DisplayListVector2(1.f, 0.f));
 
-    void PushToDisplayList(DisplayList& displayList) {displayList.PushRasterDisplay(m_rasterDisplay);}
+    void PushToDisplayList(DisplayList& displayList);
 
     void SetScrollOffsetPixels(int32_t x, int32_t y)
     {
@@ -50,7 +50,15 @@ public:
     }
 
 private:
-    const uint8_t* createScanline(int32_t scanline);
+    struct DisplayListInfo
+    {
+        TileMap* m_pTileMap;
+        int32_t  m_scrollOffsetPixelsX;
+        int32_t  m_scrollOffsetPixelsY;
+        uint32_t m_horizontalScrollOffset;
+    };
+
+    const uint8_t* createScanline(int32_t scanline, DisplayListInfo& displayListInfo);
     friend const uint8_t* tileMapScanlineCallback(uint32_t, void*);
     void fill1BitPixelSpan(int32_t srcPixelIdx, int32_t dstPixelIdx, int32_t tilePixelRow, int32_t count) const;
 
@@ -74,4 +82,6 @@ private:
     uint8_t*                   m_scanline;
     int32_t                    m_cachedRow;
     const uint8_t*             m_cachedRowTiles;
+    int32_t                    m_displayListInfoIdx;
+    DisplayListInfo            m_displayListInfo[2];
 };

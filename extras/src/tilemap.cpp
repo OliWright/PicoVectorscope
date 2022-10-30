@@ -43,10 +43,11 @@ static const uint8_t kBitReverseTable256[] =
   0x0F, 0x8F, 0x4F, 0xCF, 0x2F, 0xAF, 0x6F, 0xEF, 0x1F, 0x9F, 0x5F, 0xDF, 0x3F, 0xBF, 0x7F, 0xFF
 };
 
-
 const uint8_t* tileMapScanlineCallback(uint32_t scanline, void* userData)
 {
-    return ((TileMap*)userData)->createScanline((int32_t)scanline);
+    TileMap::DisplayListInfo& displayListInfo = *(TileMap::DisplayListInfo*)userData;
+
+    return displayListInfo.m_pTileMap->createScanline((int32_t)scanline, displayListInfo);
 }
 
 TileMap::TileMap(Mode                      mode,
@@ -64,7 +65,8 @@ TileMap::TileMap(Mode                      mode,
       m_visibleHeightTiles(visibleHeightTiles),
       m_rowCallback(rowCallback),
       m_cachedRow(-1),
-      m_cachedRowTiles(nullptr)
+      m_cachedRowTiles(nullptr),
+      m_displayListInfoIdx(0)
 {
     switch(m_mode)
     {
@@ -91,7 +93,6 @@ TileMap::TileMap(Mode                      mode,
 
     m_rasterDisplay.width = (uint32_t) m_visibleWidthPixels;
     m_rasterDisplay.height = (uint32_t) m_visibleHeightPixels;
-    m_rasterDisplay.userData = this;
     m_rasterDisplay.scanlineCallback = tileMapScanlineCallback;
     m_rasterDisplay.bottomRight = bottomRight;
     m_rasterDisplay.bottomRight = bottomRight;
@@ -99,7 +100,9 @@ TileMap::TileMap(Mode                      mode,
     switch(m_rasterDisplay.mode)
     {
         case DisplayList::RasterDisplay::Mode::e1Bit:
-            m_scanline = (uint8_t*) malloc(m_visibleWidthPixels >> 3);
+            // Allocate an extra byte because we utilise the horizontal scroll
+            // offset in DisplayList::RasterDisplay
+            m_scanline = (uint8_t*) malloc((m_visibleWidthPixels + 7 + 8) >> 3);
             break;
         case DisplayList::RasterDisplay::Mode::e4BitLinear:
         case DisplayList::RasterDisplay::Mode::e8BitGamma:
@@ -114,9 +117,28 @@ static int32_t mod(int32_t a, int32_t b)
     return (r < 0) ? (r + b) : r;
 }
 
-const uint8_t* TileMap::createScanline(int32_t scanline)
+void TileMap::PushToDisplayList(DisplayList& displayList)
 {
-    int32_t pixelRow = mod((m_scrollOffsetPixelsY + scanline), m_heightPixels);
+    DisplayListInfo& displayListInfo = m_displayListInfo[m_displayListInfoIdx];
+    m_displayListInfoIdx = 1 - m_displayListInfoIdx;
+    displayListInfo.m_pTileMap = this;
+    displayListInfo.m_scrollOffsetPixelsX = m_scrollOffsetPixelsX;
+    displayListInfo.m_scrollOffsetPixelsY = m_scrollOffsetPixelsY;
+    switch(m_rasterDisplay.mode)
+    {
+        case DisplayList::RasterDisplay::Mode::e1Bit:
+            displayListInfo.m_horizontalScrollOffset = m_rasterDisplay.horizontalScrollOffset = mod(m_scrollOffsetPixelsX, m_widthPixels) & 7;
+            break;
+        default:
+            break;
+    }
+    m_rasterDisplay.userData = (void*) &displayListInfo;
+    displayList.PushRasterDisplay(m_rasterDisplay);
+}
+
+const uint8_t* TileMap::createScanline(int32_t scanline, struct DisplayListInfo& displayListInfo)
+{
+    int32_t pixelRow = mod((displayListInfo.m_scrollOffsetPixelsY + scanline), m_heightPixels);
     int32_t tileRow = pixelRow >> m_tileHeightLog2;
     if(m_cachedRow != tileRow)
     {
@@ -124,7 +146,7 @@ const uint8_t* TileMap::createScanline(int32_t scanline)
         m_cachedRowTiles = m_rowCallback(tileRow);
     }
 
-    int32_t startPixel = mod(m_scrollOffsetPixelsX, m_widthPixels);
+    int32_t startPixel = mod(displayListInfo.m_scrollOffsetPixelsX, m_widthPixels);
     int32_t rowWithinTile = pixelRow & ((1 << m_tileHeightLog2) - 1);
     if((startPixel + m_visibleWidthPixels) > m_widthPixels)
     {
@@ -135,9 +157,12 @@ const uint8_t* TileMap::createScanline(int32_t scanline)
         switch(m_rasterDisplay.mode)
         {
             case DisplayList::RasterDisplay::Mode::e1Bit:
-                fill1BitPixelSpan(startPixel, 0, rowWithinTile, firstSpanCount);
-                fill1BitPixelSpan(0, firstSpanCount, rowWithinTile, secondSpanCount);
+            {
+                assert(displayListInfo.m_horizontalScrollOffset == (uint32_t)(startPixel & 7));
+                fill1BitPixelSpan(startPixel, displayListInfo.m_horizontalScrollOffset, rowWithinTile, firstSpanCount);
+                fill1BitPixelSpan(0, firstSpanCount + displayListInfo.m_horizontalScrollOffset, rowWithinTile, secondSpanCount);
                 break;
+            }
             case DisplayList::RasterDisplay::Mode::e4BitLinear:
             case DisplayList::RasterDisplay::Mode::e8BitGamma:
                 break;
@@ -149,8 +174,11 @@ const uint8_t* TileMap::createScanline(int32_t scanline)
         switch(m_rasterDisplay.mode)
         {
             case DisplayList::RasterDisplay::Mode::e1Bit:
-                fill1BitPixelSpan(startPixel, 0, rowWithinTile, m_visibleWidthPixels);
+            {
+                assert(displayListInfo.m_horizontalScrollOffset == (uint32_t)(startPixel & 7));
+                fill1BitPixelSpan(startPixel, displayListInfo.m_horizontalScrollOffset, rowWithinTile, m_visibleWidthPixels);
                 break;
+            }
             case DisplayList::RasterDisplay::Mode::e4BitLinear:
             case DisplayList::RasterDisplay::Mode::e8BitGamma:
                 break;
@@ -187,60 +215,44 @@ void TileMap::fill1BitPixelSpan(int32_t srcPixelIdx, int32_t dstPixelIdx, int32_
     const uint8_t* srcByte = m_cachedRowTiles + (srcPixelIdx >> 3);
     uint8_t* dstByte = m_scanline + (dstPixelIdx >> 3);
 
+    // The calling code is expected to utilise the DisplayList::RasterDisplay horizontal scroll
+    // offset in such a way as to maky the src and dst bytes align.
+    assert((srcPixelIdx & 7) == (dstPixelIdx & 7));
+
     // Bit indices here are left to right (MSB to LSB) rather than
     // the more usual right to left when dealing with arithmetic.
-    int32_t srcBitIdx = srcPixelIdx & 7;
-    int32_t dstBitIdx = dstPixelIdx & 7;
-    assert((srcBitIdx == 0) || (dstBitIdx == 0));
 
-    // Let's deal with the first few pixels in order to get the destination pixel byte-aligned
-    uint8_t tileByte = get1BitTileRowByte(*srcByte, tilePixelRow);
+    // Handle the pixels in the first byte if we're not aligned to a byte boundary
+    uint8_t tileByte = 0;
     if((dstPixelIdx & 7) != 0)
     {
-        uint8_t dstMask = 0xff >> dstBitIdx;
+        tileByte = get1BitTileRowByte(*srcByte++, tilePixelRow);
+        uint8_t dstMask = 0xff >> (dstPixelIdx & 7);
         uint8_t dstByteValue = *dstByte;
         dstByteValue &= ~dstMask;
-        dstByteValue |= (tileByte >> dstBitIdx);
+        dstByteValue |= tileByte & dstMask;
         *dstByte++ = dstByteValue;
-
-        // Advance
-        int32_t numPixelsHandled = 8 - dstBitIdx;
-        srcPixelIdx += numPixelsHandled;
-        dstPixelIdx += numPixelsHandled;
-        srcBitIdx = srcPixelIdx & 7;
-        dstBitIdx = 0;
-        count -= numPixelsHandled;
+        count -= (8 - (dstPixelIdx & 7));
     }
 
-    // Now deal with the major part of the span, dealing with a whole number
-    // of destination bytes.
+    // Now deal with the major part of the span, dealing with a whole number of bytes.
     uint8_t* dstByteEnd = dstByte + (count >> 3);
-    if(srcBitIdx == 0)
+    while(dstByte != dstByteEnd)
     {
-        // Source and destination bits are fully aligned.
-        // This is the easy case.
-        while(dstByte != dstByteEnd)
-        {
-            tileByte = get1BitTileRowByte(*srcByte++, tilePixelRow);
-            *dstByte++ = tileByte;
-        }
-    }
-    else
-    {
-        ++srcByte;
-        while(dstByte != dstByteEnd)
-        {
-            uint8_t dstByteValue = tileByte << srcBitIdx;
-            tileByte = get1BitTileRowByte(*srcByte++, tilePixelRow);
-            dstByteValue |= tileByte >> (8 - srcBitIdx);
-            *dstByte++ = dstByteValue;
-        }
+        tileByte = get1BitTileRowByte(*srcByte++, tilePixelRow);
+        *dstByte++ = tileByte;
     }
 
+    // Handle any remaining pixels in the final byte
     count = count & 7;
     if(count != 0)
     {
         // Fill in the final pixels
-
+        uint8_t dstMask = ~(0xff >> count);
+        uint8_t dstByteValue = *dstByte;
+        dstByteValue &= ~dstMask;
+        tileByte = get1BitTileRowByte(*srcByte, tilePixelRow);
+        dstByteValue |= tileByte & dstMask;
+        *dstByte = dstByteValue;
     }
 }
