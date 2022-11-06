@@ -196,6 +196,69 @@ void DisplayList::OutputToDACs()
     LOG_INFO(DisplayListSynchronisation, "DL: %d, %d\n", m_numDisplayListVectors,
              m_numDisplayListPoints);
 
+    // We do the points first, because they're time-consuming to output to the DACs, but
+    // very lightweight from the CPU-side, filling in the output buffers.
+    // So if there are any points to draw, then it gives us a head start in filling
+    // the buffers.
+    if (m_numDisplayListPoints > 0)
+    {
+        // LOG_INFO("Out Points Start\n");
+        terminatePoints();
+        terminatePoints();
+        DacOutput::SetCurrentPioSm(DacOutputPioSm::Points());
+        const uint32_t kRepeatCount = 1;
+        for (uint32_t i = 0; i < kRepeatCount; ++i)
+        {
+            Point*   pPoint             = m_pDisplayListPoints;
+            uint32_t numPointsRemaining = m_numDisplayListPoints;
+
+            while (numPointsRemaining)
+            {
+                uint32_t  numPointsInBatch;
+                uint32_t* pOutput
+                    = DacOutput::AllocateBufferSpace(numPointsRemaining, numPointsInBatch);
+
+                // Point* pEnd = pPoint + m_numDisplayListPoints;
+                const uint32_t* pOutputEnd = pOutput + numPointsInBatch;
+                for (; pOutput != pOutputEnd; ++pPoint, ++pOutput)
+                {
+                    const Point& point = *pPoint;
+                    uint32_t     bitsX = point.x.getStorage() >> (point.x.kNumFractionalBits - 12);
+                    uint32_t     bitsY = point.y.getStorage() >> (point.y.kNumFractionalBits - 12);
+                    uint32_t     bits  = bitsX | (bitsY << 12);
+
+                    // Get Z in terms of how many points.pio cycles do we want the point to be held
+                    // for. The max time we can have is 2044 cycles, so let's go with 11-bits for
+                    // now
+                    int32_t cycles = (int32_t)(point.brightness * point.brightness).getStorage()
+                                     >> (point.brightness.kNumFractionalBits - 11);
+                    // Subtract the 12 cycle per-point constant
+                    cycles -= 12;
+                    uint32_t bitsZ;
+                    if (cycles > 254)
+                    {
+                        // We need to use the long delay loop to accomplish this length of delay
+                        bits |= (1 << 24);
+
+                        bitsZ = cycles >> 4;
+                        if (bitsZ > 127)
+                        {
+                            bitsZ = 127;
+                        }
+                    }
+                    else
+                    {
+                        // Short delay is good
+                        bitsZ = (cycles < 0) ? 0 : (cycles >> 1);
+                    }
+                    bits |= (bitsZ << 25);
+                    *pOutput = bits;
+                }
+                numPointsRemaining -= numPointsInBatch;
+            }
+        }
+        // LOG_INFO("Out Points End\n");
+    }
 
     for (uint32_t i = 0; i < m_numRasterDisplays; ++i)
     {
@@ -233,18 +296,27 @@ void DisplayList::OutputToDACs()
                 const uint8_t* end      = pixel + ((rasterDisplay.width + 7 + rasterDisplay.horizontalScrollOffset) >> 3);
                 const uint16_t holdBits = 15 << 12;
                 uint bitStart = rasterDisplay.horizontalScrollOffset;
+                uint bytesWithoutOutput = 0;
                 for (; pixel != end; ++pixel)
                 {
                     uint8_t pixelBlock = *pixel;
+                    ++bytesWithoutOutput;
                     for (uint bitIdx = bitStart; bitIdx < 8; ++bitIdx)
                     {
                         x += dx;
                         if ((pixelBlock & (0x80 >> bitIdx)) != 0)
                         {
                             *(pOutput++) = scalarTo12bitNoWrap(x) | holdBits;
+                            bytesWithoutOutput = 0;
                         }
                     }
                     bitStart = 0;
+
+                    if(bytesWithoutOutput == 2)
+                    {
+                        bytesWithoutOutput = 0;
+                        *(pOutput++) = scalarTo12bitNoWrap(x);
+                    }
                 }
                 break;
             }
@@ -344,67 +416,6 @@ void DisplayList::OutputToDACs()
         }
         // LOG_INFO("Out Vectors End\n");
     }
-#if 1
-    if (m_numDisplayListPoints > 0)
-    {
-        // LOG_INFO("Out Points Start\n");
-        terminatePoints();
-        terminatePoints();
-        DacOutput::SetCurrentPioSm(DacOutputPioSm::Points());
-        const uint32_t kRepeatCount = 1;
-        for (uint32_t i = 0; i < kRepeatCount; ++i)
-        {
-            Point*   pPoint             = m_pDisplayListPoints;
-            uint32_t numPointsRemaining = m_numDisplayListPoints;
-
-            while (numPointsRemaining)
-            {
-                uint32_t  numPointsInBatch;
-                uint32_t* pOutput
-                    = DacOutput::AllocateBufferSpace(numPointsRemaining, numPointsInBatch);
-
-                // Point* pEnd = pPoint + m_numDisplayListPoints;
-                const uint32_t* pOutputEnd = pOutput + numPointsInBatch;
-                for (; pOutput != pOutputEnd; ++pPoint, ++pOutput)
-                {
-                    const Point& point = *pPoint;
-                    uint32_t     bitsX = point.x.getStorage() >> (point.x.kNumFractionalBits - 12);
-                    uint32_t     bitsY = point.y.getStorage() >> (point.y.kNumFractionalBits - 12);
-                    uint32_t     bits  = bitsX | (bitsY << 12);
-
-                    // Get Z in terms of how many points.pio cycles do we want the point to be held
-                    // for. The max time we can have is 2044 cycles, so let's go with 11-bits for
-                    // now
-                    int32_t cycles = (int32_t)(point.brightness * point.brightness).getStorage()
-                                     >> (point.brightness.kNumFractionalBits - 11);
-                    // Subtract the 12 cycle per-point constant
-                    cycles -= 12;
-                    uint32_t bitsZ;
-                    if (cycles > 254)
-                    {
-                        // We need to use the long delay loop to accomplish this length of delay
-                        bits |= (1 << 24);
-
-                        bitsZ = cycles >> 4;
-                        if (bitsZ > 127)
-                        {
-                            bitsZ = 127;
-                        }
-                    }
-                    else
-                    {
-                        // Short delay is good
-                        bitsZ = (cycles < 0) ? 0 : (cycles >> 1);
-                    }
-                    bits |= (bitsZ << 25);
-                    *pOutput = bits;
-                }
-                numPointsRemaining -= numPointsInBatch;
-            }
-        }
-        // LOG_INFO("Out Points End\n");
-    }
-#endif
 
     DacOutput::Flush(true);
 }
