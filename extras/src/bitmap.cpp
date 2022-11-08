@@ -18,16 +18,17 @@
 //
 // oli.wright.github@gmail.com
 
-#include "pico/types.h"
+#include "extras/bitmap.h"
 
-void Draw8bitWideSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
-                                     int            displayPitchInBytes,
-                                     int            x,
-                                     int            y,
-                                     int            width,
-                                     int            height,
-                                     const uint8_t* sprite,
-                                     int            spritePitchInBytes)
+template <SpriteMode spriteMode>
+static void draw8bitWideSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
+                                            int            displayPitchInBytes,
+                                            int            x,
+                                            int            y,
+                                            int            width,
+                                            int            height,
+                                            const uint8_t* sprite,
+                                            int            spritePitchInBytes)
 {
     uint8_t*       displayByte = bitmapDisplay + (y * displayPitchInBytes) + (x >> 3);
     uint8_t        bitOffset   = x & 7;
@@ -35,11 +36,23 @@ void Draw8bitWideSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
     if (bitOffset == 0)
     {
         // Sprite is nicely aligned with the destination bytes
-        if (width == 8)
+        if ((width == 8) || (spriteMode != SpriteMode::Default))
         {
             while (sprite != end)
             {
-                *displayByte = *sprite;
+                const uint8_t spritePixels = *sprite;
+                switch (spriteMode) // This should be a compile-time switch
+                {
+                case SpriteMode::Default:
+                    *displayByte = spritePixels;
+                    break;
+                case SpriteMode::SetPixels:
+                    *displayByte |= spritePixels;
+                    break;
+                case SpriteMode::ClearPixels:
+                    *displayByte &= ~spritePixels;
+                    break;
+                }
                 sprite += spritePitchInBytes;
                 displayByte += displayPitchInBytes;
             }
@@ -70,7 +83,19 @@ void Draw8bitWideSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
         uint8_t*       dst = displayByte;
         while (src != end)
         {
-            *dst = (*dst & mask) | (*src >> bitOffset);
+            const uint8_t spritePixels = (*src >> bitOffset);
+            switch (spriteMode) // This should be a compile-time switch
+            {
+            case SpriteMode::Default:
+                *dst = (*dst & mask) | spritePixels;
+                break;
+            case SpriteMode::SetPixels:
+                *dst |= spritePixels;
+                break;
+            case SpriteMode::ClearPixels:
+                *dst &= ~spritePixels;
+                break;
+            }
             src += spritePitchInBytes;
             dst += displayPitchInBytes;
         }
@@ -85,13 +110,53 @@ void Draw8bitWideSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
             bitOffset = 8 - bitOffset;
             while (src != end)
             {
-                *dst = (*dst & mask) | (*src << bitOffset);
+                const uint8_t spritePixels = (*src << bitOffset);
+                switch (spriteMode) // This should be a compile-time switch
+                {
+                case SpriteMode::Default:
+                    *dst = (*dst & mask) | spritePixels;
+                    break;
+                case SpriteMode::SetPixels:
+                    *dst |= spritePixels;
+                    break;
+                case SpriteMode::ClearPixels:
+                    *dst &= ~spritePixels;
+                    break;
+                }
                 src += spritePitchInBytes;
                 dst += displayPitchInBytes;
             }
         }
     }
 }
+
+static void draw8bitWideSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
+                                            int            displayPitchInBytes,
+                                            int            x,
+                                            int            y,
+                                            int            width,
+                                            int            height,
+                                            const uint8_t* sprite,
+                                            int            spritePitchInBytes,
+                                            SpriteMode     spriteMode)
+{
+    switch (spriteMode)
+    {
+    case SpriteMode::Default:
+        draw8bitWideSpriteTo1bitDisplay<SpriteMode::Default>(
+            bitmapDisplay, displayPitchInBytes, x, y, width, height, sprite, spritePitchInBytes);
+        break;
+    case SpriteMode::SetPixels:
+        draw8bitWideSpriteTo1bitDisplay<SpriteMode::SetPixels>(
+            bitmapDisplay, displayPitchInBytes, x, y, width, height, sprite, spritePitchInBytes);
+        break;
+    case SpriteMode::ClearPixels:
+        draw8bitWideSpriteTo1bitDisplay<SpriteMode::ClearPixels>(
+            bitmapDisplay, displayPitchInBytes, x, y, width, height, sprite, spritePitchInBytes);
+        break;
+    }
+}
+
 
 // Totally sub-optimal
 void DrawSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
@@ -101,14 +166,15 @@ void DrawSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
                              int            width,
                              int            height,
                              const uint8_t* sprite,
-                             int            spritePitchInBytes)
+                             int            spritePitchInBytes,
+                             SpriteMode     mode)
 {
     const int numColumns = (width + 7) >> 3;
     for (int i = 0; i < numColumns; ++i)
     {
-        Draw8bitWideSpriteTo1bitDisplay(bitmapDisplay, displayPitchInBytes, x + (i << 3), y,
+        draw8bitWideSpriteTo1bitDisplay(bitmapDisplay, displayPitchInBytes, x + (i << 3), y,
                                         (width >= 8) ? 8 : width, height, sprite + i,
-                                        spritePitchInBytes);
+                                        spritePitchInBytes, mode);
         width -= 8;
     }
 }

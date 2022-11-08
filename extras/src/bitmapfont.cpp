@@ -57,7 +57,7 @@ void DrawTextTo1bitDisplay(
                 const uint8_t bits = (uint8_t)font8x8_basic[*chr & 0x7f][i];
                 charSprite[i]      = kBitReverseTable256[bits];
             }
-            Draw8bitWideSpriteTo1bitDisplay(bitmapDisplay, pitchInBytes, runningX, y, 8, 8, charSprite);
+            DrawSpriteTo1bitDisplay(bitmapDisplay, pitchInBytes, runningX, y, 8, 8, charSprite, 1, SpriteMode::Default);
         }
         runningX += 8;
     }

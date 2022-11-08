@@ -21,16 +21,14 @@
 #pragma once
 #include "pico/types.h"
 
-// This does absolutely no range checking at all.
-void Draw8bitWideSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
-                                     int            displayPitchInBytes,
-                                     int            x,
-                                     int            y,
-                                     int            width,
-                                     int            height,
-                                     const uint8_t* sprite,
-                                     int            spritePitchInBytes = 1);
+enum class SpriteMode
+{
+    Default,     // Overwrites all target pixels
+    SetPixels,   // Only writes non-zero sprite pixels
+    ClearPixels, // Target is cleared from non-zero sprite pixels
+};
 
+// These does absolutely no range checking at all.
 void DrawSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
                              int            displayPitchInBytes,
                              int            x,
@@ -38,7 +36,8 @@ void DrawSpriteTo1bitDisplay(uint8_t*       bitmapDisplay,
                              int            width,
                              int            height,
                              const uint8_t* sprite,
-                             int            spritePitchInBytes);
+                             int            spritePitchInBytes,
+                             SpriteMode     mode);
 
 void ClearRectOn1bitDisplay(
     uint8_t* bitmapDisplay, int pitchInBytes, int x, int y, int width, int height);
