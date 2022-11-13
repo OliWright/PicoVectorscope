@@ -75,11 +75,13 @@ void TestCard::UpdateAndRender(DisplayList& displayList, float dt)
 
     transform.setAsScale(0.018f);
 
+#if 0
     for(uint32_t i = 0; i < (uint32_t) GameShape::eCount; ++i)
     {
         transform.setTranslation(FixedTransform2D::Vector2Type(0.1f + (0.8f * i / (float) ((int)GameShape::eCount - 1)), 0.25f));
         PushGameShape(displayList, transform, (GameShape) i, Intensity(1.f));
     }
+#endif
 
     constexpr int kRampCount = 64;
     for(int i = 0; i < kRampCount; ++i)
@@ -99,11 +101,12 @@ void TestCard::UpdateAndRender(DisplayList& displayList, float dt)
     {
         rotation -= (kPi * 2.f);
     }
+#if 0
     SinTable::SinCos(rotation, s, c);
     transform.setAsRotation(s, c);
     transform *= 0.05f;
     transform.setTranslation(FixedTransform2D::Vector2Type(0.5f, 0.5f));
     PushGameShape(displayList, transform, GameShape::eAsteroid0, Intensity(1.f));
-
+#endif
     PushFragmentsToDisplayList(displayList, s_fragments, s_numFragments);
 }

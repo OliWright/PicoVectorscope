@@ -31,7 +31,6 @@ target_sources(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src/dacoutputsm.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/fixedpoint.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/displaylist.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/gameshapes.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/ledstatus.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/log.cpp
         ${CMAKE_CURRENT_LIST_DIR}/src/lookuptable.cpp
