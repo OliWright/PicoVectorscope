@@ -60,6 +60,12 @@ public:
     // to be drawn so slowly that they're impractical.
     void PushPoint(DisplayListScalar x, DisplayListScalar y, Intensity intensity);
 
+    // Convenience version
+    inline void PushPoint(const DisplayListVector2& coord, Intensity intensity)
+    {
+        PushPoint(coord.x, coord.y, intensity);
+    }
+
     // *Experimental* Raster display
     typedef const uint8_t* (*RasterScanlineCallback)(uint32_t scanline, void* userData);
     struct RasterDisplay
