@@ -50,7 +50,18 @@ class Demo
 public:
     Demo(int order = 0, int m_targetRefreshRate = 60);
 
+    // One-off initialisation
     virtual void Init() {}
+
+    // Called when the Demo is started.
+    // This is a good opportunity to allocate memory.
+    virtual void Start() {}
+
+    // Called when the Demo is ended (switching to a different Demo).
+    // This is a good opportunity to free up memory.
+    virtual void End() {}
+
+    // Called every frame.
     virtual void UpdateAndRender(DisplayList&, float dt) {}
 
     int GetTargetRefreshRate() const { return m_targetRefreshRate; }
