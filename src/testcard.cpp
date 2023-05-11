@@ -28,7 +28,7 @@ public:
     void Init() override;
     void UpdateAndRender(DisplayList& displayList, float dt) override;
 };
-static TestCard s_textAndShapes(0);
+//static TestCard s_textAndShapes(0);
 
 static constexpr uint32_t kMaxFragments = 16;
 static Fragment s_fragments[kMaxFragments] = {};
