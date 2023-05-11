@@ -56,6 +56,7 @@
 int32_t FixedPointSqrt(int32_t inValue, int32_t numFractionalBits);
 // 32-bit pseudo random number generator
 uint32_t SimpleRand();
+extern uint32_t g_randSeed;
 
 // This will shift right if shift is +ve, or shift left is shift is -ve
 template <typename T>
@@ -271,9 +272,21 @@ public:
     }
 
     template <typename T>
+    constexpr bool operator<=(const T& rhs) const
+    {
+        return m_storage <= FixedPoint(rhs).getStorage();
+    }
+
+    template <typename T>
     constexpr bool operator>(const T& rhs) const
     {
         return m_storage > FixedPoint(rhs).getStorage();
+    }
+
+    template <typename T>
+    constexpr bool operator>=(const T& rhs) const
+    {
+        return m_storage >= FixedPoint(rhs).getStorage();
     }
 
     template <typename T>
