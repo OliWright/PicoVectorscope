@@ -21,13 +21,13 @@
 #include "sintable.h"
 
 // Extremely simple random number generator
-static uint32_t s_randSeed = 123456789;
+uint32_t g_randSeed = 123456789;
 uint32_t SimpleRand()
 {
     constexpr uint32_t kA = 1103515245;
     constexpr uint32_t kC = 12345;
-    s_randSeed = kA * s_randSeed + kC;
-    return s_randSeed;
+    g_randSeed = kA * g_randSeed + kC;
+    return g_randSeed;
 }
 
 // Some example fixed point types for testing

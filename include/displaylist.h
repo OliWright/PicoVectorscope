@@ -30,7 +30,7 @@
 #include "types.h"
 
 typedef FixedPoint<1, 14, int16_t, int32_t, false> DisplayListScalar;
-typedef FixedPoint<1, 26, int32_t, int32_t, false> DisplayListIntermediate;
+typedef FixedPoint<1, 28, int32_t, int32_t, false> DisplayListIntermediate;
 typedef FixedPoint<3, 12, int16_t, int32_t, false> Intensity;
 
 // Calculate the dx and dy steps in the DisplayListVector, or at the

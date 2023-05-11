@@ -106,12 +106,15 @@ void checkButton()
         && (Buttons::HoldTimeMs(Buttons::Id::Right) > 500)
         && Buttons::IsJustPressed(Buttons::Id::Fire))
     {
+        Buttons::ClearJustPressed(Buttons::Id::Fire);
+        s_demos[s_demoIdx]->End();
         if (++s_demoIdx == s_numDemos)
         {
             s_demoIdx = 0;
         }
         LOG_INFO(ButtonFeedback, "Changing to demo %d\n", s_demoIdx);
         initRefreshRate(*s_demos[s_demoIdx]);
+        s_demos[s_demoIdx]->Start();
     }
     switch (Serial::GetLastCharIn())
     {
@@ -258,6 +261,7 @@ int main()
     {
         s_demos[i]->Init();
     }
+    s_demos[s_demoIdx]->Start();
 
 #if DAC_OUTPUT_CORE == 1
     multicore_launch_core1(dacOutputTask);

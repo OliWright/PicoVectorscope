@@ -32,10 +32,10 @@
 static constexpr uint kNumButtons = (uint)Buttons::Id::Count;
 
 static const uint32_t s_gpioPins[] = {
-    22, // Left
-    21, // Right
-    20, // Thrust
-    19, // Fire
+    19, // Left
+    20, // Right
+    21, // Thrust
+    22, // Fire
 };
 
 static_assert(count_of(s_gpioPins) == kNumButtons, "");
@@ -88,7 +88,31 @@ bool Buttons::IsJustPressed(Id id)
     return IsHeld(id) && ((s_buttonWasPressed & (1 << (int)id)) == 0);
 }
 
+void Buttons::ClearJustPressed(Id id)
+{
+    s_buttonWasPressed |= (1 << (int)id);
+}
+
 bool Buttons::IsHeld(Id id) { return (s_buttonIsPressed & (1 << (int)id)) != 0; }
+
+void Buttons::FakePress(Id id, bool pressed)
+{
+    uint bit = 1 << (int) id;
+    if (pressed)
+    {
+        s_buttonIsPressed |= bit;
+        if ((s_buttonWasPressed & bit) == 0)
+        {
+            // It wasn't pressed on the previous update
+            s_timePressedMs[(int) id] = s_lastUpdateTimeMs;
+        }
+    }
+    else
+    {
+        s_buttonIsPressed &= ~bit;
+    }
+}
+
 
 uint64_t Buttons::HoldTimeMs(Id id)
 {
