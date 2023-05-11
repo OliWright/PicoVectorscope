@@ -44,11 +44,15 @@ public:
 
     // Returns true for the first frame that a button is pressed.
     static bool IsJustPressed(Id id);
+    // Clear the JustPressed state so that nobody else consumes it.
+    static void ClearJustPressed(Id id);
     // Returns true if a button is pressed right now.
     static bool IsHeld(Id id);
     // How long has a button being held for.
     // Returns 0 if the button is not pressed.
     static uint64_t HoldTimeMs(Id id);
+    // Fake a button press.  Can be used to for demo playback.
+    static void FakePress(Id id, bool pressed);
 
 public:
     // The picovectorscope framework will call this on startup
