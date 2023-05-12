@@ -46,4 +46,5 @@ private:
 
 private:
     static DacOutputPioSmConfig s_configs[(int)SmID::eCount];
+    static bool timerCallback(struct repeating_timer* t);
 };

@@ -20,12 +20,16 @@
 
 #include "dacoutputsm.h"
 #include "log.h"
+#include "pico/stdlib.h"
+#include "fixedpoint.h"
 
 // The headers for each individual PIO program
 #include "idle.pio.h"
 #include "vector.pio.h"
 #include "points.pio.h"
 #include "raster.pio.h"
+
+#define DO_SPEED_RAMPING 1
 
 DacOutputPioSmConfig DacOutputPioSm::s_configs[(int)DacOutputPioSm::SmID::eCount] = {};
 
@@ -107,6 +111,83 @@ void DacOutputPioSm::configureSm(SmID smID)
     }
 }
 
+bool g_overrideRasterSpeed = false;
+#if DO_SPEED_RAMPING
+static bool s_overridingRasterSpeed = false;
+typedef FixedPoint<14,14,int32_t,int32_t> RasterSpeed;
+RasterSpeed g_rasterSpeed = 0.001f;
+RasterSpeed g_targetRasterSpeed = 1.f;
+RasterSpeed g_rasterSpeedStep = 0.005f;
+
+struct RasterSpeedPreset
+{
+    RasterSpeed speed;
+    RasterSpeed targetSpeed;
+    RasterSpeed speedStep;
+};
+static RasterSpeedPreset s_rasterSpeedPresets[] = 
+{
+    {0.003f, 0.003f, 0.f},
+    {0.003f, 0.0005f, -0.0003f},
+    {0.0005f, 0.0001f, -0.0001f},
+    {0.0001f, 1.f, 0.02f},
+};
+static const int kNumRasterSpeedPresets = count_of(s_rasterSpeedPresets);
+static int s_rasterSpeedPreset = -1;
+static repeating_timer_t s_dacOutputTimer;
+
+static void nextRasterSpeedPreset()
+{
+    if(++s_rasterSpeedPreset == kNumRasterSpeedPresets)
+    {
+        s_rasterSpeedPreset = 0;
+    }
+    g_rasterSpeed = s_rasterSpeedPresets[s_rasterSpeedPreset].speed;
+    g_targetRasterSpeed = s_rasterSpeedPresets[s_rasterSpeedPreset].targetSpeed;
+    g_rasterSpeedStep = s_rasterSpeedPresets[s_rasterSpeedPreset].speedStep;
+}
+#endif
+
+bool DacOutputPioSm::timerCallback(struct repeating_timer* t)
+{
+#if DO_SPEED_RAMPING
+    bool pressed = gpio_get(22);
+    static bool was_pressed = false;
+    if(pressed != was_pressed)
+    {
+        was_pressed = pressed;
+        if(pressed)
+        {
+            nextRasterSpeedPreset();
+        }
+    }
+
+    bool override = g_overrideRasterSpeed;
+    if(g_overrideRasterSpeed != s_overridingRasterSpeed)
+    {
+        s_overridingRasterSpeed = g_overrideRasterSpeed;
+        override = true;
+    }
+    if(g_overrideRasterSpeed)
+    {
+        g_rasterSpeed += g_rasterSpeedStep;
+        if(((g_rasterSpeedStep > 0.f) && (g_rasterSpeed >= g_targetRasterSpeed)) || ((g_rasterSpeedStep < 0.f) && (g_rasterSpeed <= g_targetRasterSpeed)))
+        {
+            g_rasterSpeed = g_targetRasterSpeed;
+            //g_overrideRasterSpeed = s_overridingRasterSpeed = false;
+        }
+    }
+    if(override)
+        {
+        DacOutputPioSmConfig& config = s_configs[(int) SmID::eRaster];
+        FixedPoint<16,8,uint32_t,uint32_t> clockDivider = g_rasterSpeed.recip();
+        sm_config_set_clkdiv_int_frac(&config.m_config, clockDivider.getIntegerPart(), (uint8_t) (clockDivider.getStorage() & 0xff));
+        pio_sm_set_config(pio0, s_overloadedStateMachine, &config.m_config);
+    }
+#endif
+    return true;
+}
+
 void DacOutputPioSm::Init()
 {
     // Associate all the pins we're going to use with the PIO
@@ -127,6 +208,11 @@ void DacOutputPioSm::Init()
     {
         configureSm((SmID)i);
     }
+
+#if DO_SPEED_RAMPING
+    nextRasterSpeedPreset();
+    add_repeating_timer_us(-1000000 / 10, timerCallback, NULL, &s_dacOutputTimer);
+#endif
 }
 
 void DacOutputPioSmConfig::SetEnabled(bool enabled) const
