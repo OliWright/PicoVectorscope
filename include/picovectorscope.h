@@ -31,7 +31,8 @@
 #include "log.h"
 #include "shapes.h"
 #include "text.h"
-#include "transform2d.h"
 #include "types.h"
 #include "sintable.h"
+#include "transform2d.h"
+#include "transform3d.h"
 

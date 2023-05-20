@@ -31,5 +31,18 @@ struct Vector2
     Vector2() {}
     Vector2(ScalarType x, ScalarType y) : x(x), y(y) {}
 
+    const ScalarType& operator[](int idx) const { return (&x)[idx]; }
+    ScalarType& operator[](int idx) { return (&x)[idx]; }
+};
+
+template <typename T>
+struct Vector3
+{
+    typedef T  ScalarType;
+    ScalarType x, y, z;
+    Vector3() {}
+    Vector3(ScalarType x, ScalarType y, ScalarType z) : x(x), y(y), z(z) {}
+
+    const ScalarType& operator[](int idx) const { return (&x)[idx]; }
     ScalarType& operator[](int idx) { return (&x)[idx]; }
 };
