@@ -23,7 +23,7 @@
 #include "pico/float.h"
 
 
-SinTable::SinTable() : LookUpTable<SinTableValue>(1024, true, kPi * 2.f)
+SinTable::SinTable() : LookUpTable<SinTableValue>(4096, true, kPi * 2.f)
 {
     SinTableValue* pTable = (SinTableValue*)m_table;
     for (uint32_t i = 0; i < m_numValues; ++i)
