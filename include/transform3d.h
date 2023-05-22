@@ -21,6 +21,7 @@
 #pragma once
 #include "types.h"
 #include "fixedpoint.h"
+#include "sintable.h"
 
 template <typename OrientationT = float, typename TranslationT = float>
 struct Transform3D
@@ -54,11 +55,11 @@ struct Transform3D
         OrientationType sx, cx, sy, cy, sz, cz;
 
         SinTable::SinCos(x, s, c);
-        sx = s; cx = c;
+        sx = (OrientationType) s; cx = (OrientationType) c;
         SinTable::SinCos(y, s, c);
-        sy = s; cy = c;
+        sy = (OrientationType) s; cy = (OrientationType) c;
         SinTable::SinCos(z, s, c);
-        sz = s; cz = c;
+        sz = (OrientationType) s; cz = (OrientationType) c;
 
         m[0] = OrientationVector3Type( cz * cy,  sz * cx +  cz * -sy * -sx,  sz * sx +  cz * -sy * cx);
         m[1] = OrientationVector3Type(-sz * cy,  cz * cx + -sz * -sy * -sx,  cz * sx + -sz * -sy * cx);
@@ -123,7 +124,13 @@ struct Transform3D
 typedef Transform3D<float> FloatTransform3D;
 
 // Use this fixed point implementation instead
+#if 0 // Switch to a floating-point reference implementation, to help debug
+      // suspected fixed-point issues.
+typedef float StandardFixedOrientationScalar;
+typedef float StandardFixedTranslationScalar;
+#else
 typedef FixedPoint<3,16,int32_t,int64_t,false> StandardFixedOrientationScalar;
 typedef FixedPoint<12,8,int32_t,int64_t,false> StandardFixedTranslationScalar;
+#endif
 typedef Vector3<StandardFixedTranslationScalar> StandardFixedTranslationVector;
 typedef Transform3D<StandardFixedOrientationScalar, StandardFixedTranslationScalar> FixedTransform3D;
