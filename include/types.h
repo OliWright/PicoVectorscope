@@ -28,11 +28,11 @@ struct Vector2
 {
     typedef T  ScalarType;
     ScalarType x, y;
-    Vector2() {}
-    Vector2(ScalarType x, ScalarType y) : x(x), y(y) {}
+    constexpr Vector2() {}
+    constexpr Vector2(ScalarType x, ScalarType y) : x(x), y(y) {}
 
-    const ScalarType& operator[](int idx) const { return (&x)[idx]; }
-    ScalarType& operator[](int idx) { return (&x)[idx]; }
+    constexpr const ScalarType& operator[](int idx) const { return (&x)[idx]; }
+    constexpr ScalarType& operator[](int idx) { return (&x)[idx]; }
 };
 
 template <typename T>
@@ -40,54 +40,54 @@ struct Vector3
 {
     typedef T  ScalarType;
     ScalarType x, y, z;
-    Vector3() {}
-    Vector3(ScalarType x, ScalarType y, ScalarType z) : x(x), y(y), z(z) {}
+    constexpr Vector3() {}
+    constexpr Vector3(ScalarType x, ScalarType y, ScalarType z) : x(x), y(y), z(z) {}
     template<typename rhsScalarT>
-    Vector3(Vector3<rhsScalarT> rhs) : x(rhs.x), y(rhs.y), z(rhs.z) {}
+    constexpr Vector3(Vector3<rhsScalarT> rhs) : x(rhs.x), y(rhs.y), z(rhs.z) {}
 
-    Vector3 operator + (const Vector3& rhs) const
+    constexpr Vector3 operator + (const Vector3& rhs) const
     {
         return Vector3(x + rhs.x, y + rhs.y, z + rhs.z);
     }
 
-    Vector3 operator - (const Vector3& rhs) const
+    constexpr Vector3 operator - (const Vector3& rhs) const
     {
         return Vector3(x - rhs.x, y - rhs.y, z - rhs.z);
     }
 
     template<typename rhsScalarT>
-    Vector3 operator * (rhsScalarT rhs) const
+    constexpr Vector3 operator * (rhsScalarT rhs) const
     {
         return Vector3(x * rhs, y * rhs, z * rhs);
     }
 
-    Vector3& operator += (const Vector3& rhs)
+    constexpr Vector3& operator += (const Vector3& rhs)
     {
         *this = *this + rhs;
         return *this;
     }
 
-    Vector3& operator -= (const Vector3& rhs)
+    constexpr Vector3& operator -= (const Vector3& rhs)
     {
         *this = *this - rhs;
         return *this;
     }
 
     template<typename rhsScalarT>
-    Vector3& operator *= (rhsScalarT rhs)
+    constexpr Vector3& operator *= (rhsScalarT rhs)
     {
         *this = *this * rhs;
         return *this;
     }
 
     template<typename rhsScalarT>
-    void operator = (const Vector3<T>& rhs)
+    constexpr void operator = (const Vector3<T>& rhs)
     {
         x = rhs.x;
         y = rhs.y;
         z = rhs.z;
     }
 
-    const ScalarType& operator[](int idx) const { return (&x)[idx]; }
-    ScalarType& operator[](int idx) { return (&x)[idx]; }
+    constexpr const ScalarType& operator[](int idx) const { return (&x)[idx]; }
+    constexpr ScalarType& operator[](int idx) { return (&x)[idx]; }
 };
