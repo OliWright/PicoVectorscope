@@ -144,12 +144,9 @@ struct Transform3D
 
         // Calculate the inverted translation
         const TranslationVector3Type negTrans(-t.x, -t.y, -t.z);
-        TranslationVector3Type invertedTrans = (TranslationVector3Type(m[0]) * negTrans.x);
-        invertedTrans += (TranslationVector3Type(m[1]) * negTrans.y);
-        invertedTrans += (TranslationVector3Type(m[2]) * negTrans.z);
-        outTransform.t.x = (invertedTrans.x * outTransform.m[0][0]) + (invertedTrans.y * outTransform.m[1][0]) + (invertedTrans.z * outTransform.m[2][0]);
-        outTransform.t.y = (invertedTrans.x * outTransform.m[0][1]) + (invertedTrans.y * outTransform.m[1][1]) + (invertedTrans.z * outTransform.m[2][1]);
-        outTransform.t.z = (invertedTrans.x * outTransform.m[0][2]) + (invertedTrans.y * outTransform.m[1][2]) + (invertedTrans.z * outTransform.m[2][2]);
+        outTransform.t.x = (negTrans.x * outTransform.m[0][0]) + (negTrans.y * outTransform.m[1][0]) + (negTrans.z * outTransform.m[2][0]);
+        outTransform.t.y = (negTrans.x * outTransform.m[0][1]) + (negTrans.y * outTransform.m[1][1]) + (negTrans.z * outTransform.m[2][1]);
+        outTransform.t.z = (negTrans.x * outTransform.m[0][2]) + (negTrans.y * outTransform.m[1][2]) + (negTrans.z * outTransform.m[2][2]);
     }
 };
 
