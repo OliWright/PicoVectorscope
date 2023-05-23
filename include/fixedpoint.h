@@ -359,4 +359,11 @@ static inline T saturate(const T& val)
     return (val > 1.f) ? 1.f : (val < 0.f) ? 0.f : val;
 }
 
+// Free operator, float * FixedPoint
+template <int numWholeBits, int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping>
+static inline float operator * (float a, FixedPoint<numWholeBits, numFractionalBits, TStorageType, TIntermediateStorageType, doClamping> b)
+{
+    return a * (float) b;
+}
+
 void TestFixedPoint();
