@@ -42,6 +42,8 @@ struct Vector3
     ScalarType x, y, z;
     Vector3() {}
     Vector3(ScalarType x, ScalarType y, ScalarType z) : x(x), y(y), z(z) {}
+    template<typename rhsScalarT>
+    Vector3(Vector3<rhsScalarT> rhs) : x(rhs.x), y(rhs.y), z(rhs.z) {}
 
     Vector3 operator + (const Vector3& rhs) const
     {
@@ -76,6 +78,14 @@ struct Vector3
     {
         *this = *this * rhs;
         return *this;
+    }
+
+    template<typename rhsScalarT>
+    void operator = (const Vector3<T>& rhs)
+    {
+        x = rhs.x;
+        y = rhs.y;
+        z = rhs.z;
     }
 
     const ScalarType& operator[](int idx) const { return (&x)[idx]; }

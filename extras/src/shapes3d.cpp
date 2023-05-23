@@ -136,13 +136,15 @@ void Shape3D::Draw(DisplayList& displayList,
                    const FixedTransform3D& worldToView,
                    Intensity intensity) const
 {
+    FixedTransform3D modelToView = modelToWorld * worldToView;
+
     // Transform all the points to view space, then screen space (unless clipped)
     StandardFixedTranslationVector* viewSpacePoints = (StandardFixedTranslationVector*) alloca(sizeof(StandardFixedTranslationVector) * m_numPoints);
     DisplayListVector2* screenSpacePoints = (DisplayListVector2*) alloca(sizeof(DisplayListVector2) * m_numPoints);
     uint16_t* clipFlags = (uint16_t*) alloca(sizeof(uint16_t) * m_numPoints);
     for (uint32_t i = 0; i < m_numPoints; ++i)
     {
-        modelToWorld.transformVector(viewSpacePoints[i], m_points[i]);
+        modelToView.transformVector(viewSpacePoints[i], m_points[i]);
         viewSpacePoints[i].x *= (3.f / 4.f);
         clipFlags[i] = clipPoint(viewSpacePoints[i]);
         if(clipFlags[i] == 0)

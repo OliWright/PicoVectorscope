@@ -78,37 +78,40 @@ struct Transform3D
         t.z += translation.z;
     }
 
-    Transform3D& operator*=(const Transform3D& b)
+    Transform3D& operator*=(OrientationType scale)
     {
-        const Transform3D a = *this;
+        m[0] *= scale;
+        m[1] *= scale;
+        m[2] *= scale;
 
-        m[0][0] = (a.m[0][0] * b.m[0][0]) + (a.m[0][1] * b.m[1][0]) + (a.m[0][2] * b.m[2][0]);
-        m[0][1] = (a.m[0][0] * b.m[0][1]) + (a.m[0][1] * b.m[1][1]) + (a.m[0][2] * b.m[2][1]);
-        m[0][2] = (a.m[0][0] * b.m[0][2]) + (a.m[0][1] * b.m[1][2]) + (a.m[0][2] * b.m[2][2]);
-
-        m[1][0] = (a.m[1][0] * b.m[0][0]) + (a.m[1][1] * b.m[1][0]) + (a.m[1][2] * b.m[2][0]);
-        m[1][1] = (a.m[1][0] * b.m[0][1]) + (a.m[1][1] * b.m[1][1]) + (a.m[1][2] * b.m[2][1]);
-        m[1][2] = (a.m[1][0] * b.m[0][2]) + (a.m[1][1] * b.m[1][2]) + (a.m[1][2] * b.m[2][2]);
-
-        m[2][0] = (a.m[2][0] * b.m[0][0]) + (a.m[2][1] * b.m[1][0]) + (a.m[2][2] * b.m[2][0]);
-        m[2][1] = (a.m[2][0] * b.m[0][1]) + (a.m[2][1] * b.m[1][1]) + (a.m[2][2] * b.m[2][1]);
-        m[2][2] = (a.m[2][0] * b.m[0][2]) + (a.m[2][1] * b.m[1][2]) + (a.m[2][2] * b.m[2][2]);
- 
         return *this;
     }
 
-    Transform3D& operator*=(OrientationType scale)
+    TranslationVector3Type operator * (const TranslationVector3Type& v) const
     {
-        m[0][0] *= scale;
-        m[0][1] *= scale;
-        m[0][2] *= scale;
-        m[1][0] *= scale;
-        m[1][1] *= scale;
-        m[1][2] *= scale;
-        m[2][0] *= scale;
-        m[2][1] *= scale;
-        m[2][2] *= scale;
+        TranslationVector3Type result;
+        result.x = (v.x * m[0][0]) + (v.y * m[1][0]) + (v.z * m[2][0]) + t.x;
+        result.y = (v.x * m[0][1]) + (v.y * m[1][1]) + (v.z * m[2][1]) + t.y;
+        result.z = (v.x * m[0][2]) + (v.y * m[1][2]) + (v.z * m[2][2]) + t.z;
+        return result;
+    }
 
+    Transform3D operator * (const Transform3D& rhs) const
+    {
+        // Technically, this is backwards - but it allows for more intuitive
+        // matrix concatentation
+        // E.g. modelToView = modelToWorld * worldToView
+        Transform3D result;
+        rhs.rotateVector(result.m[0], m[0]);
+        rhs.rotateVector(result.m[1], m[1]);
+        rhs.rotateVector(result.m[2], m[2]);
+        rhs.transformVector(result.t, t);
+        return result;
+    }
+
+    Transform3D& operator *= (const Transform3D& rhs)
+    {
+        *this = *this * rhs;
         return *this;
     }
 
@@ -117,6 +120,36 @@ struct Transform3D
         result.x = (v.x * m[0][0]) + (v.y * m[1][0]) + (v.z * m[2][0]) + t.x;
         result.y = (v.x * m[0][1]) + (v.y * m[1][1]) + (v.z * m[2][1]) + t.y;
         result.z = (v.x * m[0][2]) + (v.y * m[1][2]) + (v.z * m[2][2]) + t.z;
+    }
+
+    void rotateVector(OrientationVector3Type& result, const OrientationVector3Type& v) const
+    {
+        result.x = (v.x * m[0][0]) + (v.y * m[1][0]) + (v.z * m[2][0]);
+        result.y = (v.x * m[0][1]) + (v.y * m[1][1]) + (v.z * m[2][1]);
+        result.z = (v.x * m[0][2]) + (v.y * m[1][2]) + (v.z * m[2][2]);
+    }
+
+    void orthonormalInvert(Transform3D& outTransform) const
+    {
+        // Transpose the orientation
+        outTransform.m[0][0] = m[0][0];
+        outTransform.m[0][1] = m[1][0];
+        outTransform.m[0][2] = m[2][0];
+        outTransform.m[1][0] = m[0][1];
+        outTransform.m[1][1] = m[1][1];
+        outTransform.m[1][2] = m[2][1];
+        outTransform.m[2][0] = m[0][2];
+        outTransform.m[2][1] = m[1][2];
+        outTransform.m[2][2] = m[2][2];
+
+        // Calculate the inverted translation
+        const TranslationVector3Type negTrans(-t.x, -t.y, -t.z);
+        TranslationVector3Type invertedTrans = (TranslationVector3Type(m[0]) * negTrans.x);
+        invertedTrans += (TranslationVector3Type(m[1]) * negTrans.y);
+        invertedTrans += (TranslationVector3Type(m[2]) * negTrans.z);
+        outTransform.t.x = (invertedTrans.x * outTransform.m[0][0]) + (invertedTrans.y * outTransform.m[1][0]) + (invertedTrans.z * outTransform.m[2][0]);
+        outTransform.t.y = (invertedTrans.x * outTransform.m[0][1]) + (invertedTrans.y * outTransform.m[1][1]) + (invertedTrans.z * outTransform.m[2][1]);
+        outTransform.t.z = (invertedTrans.x * outTransform.m[0][2]) + (invertedTrans.y * outTransform.m[1][2]) + (invertedTrans.z * outTransform.m[2][2]);
     }
 };
 
