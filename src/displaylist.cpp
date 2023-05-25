@@ -113,8 +113,8 @@ void DisplayList::PushVector(DisplayListScalar x, DisplayListScalar y, Intensity
     uint32_t numSteps = (time * SPEED_CONSTANT).getIntegerPart() + 1;
     vector.numSteps   = (numSteps > 0xffff) ? 0xffff : (uint16_t)numSteps;
 #if STEP_DIV_IN_DISPLAY_LIST
-    vector.stepX = DisplayListIntermediate(dx) / vector.numSteps;
-    vector.stepY = DisplayListIntermediate(dy) / vector.numSteps;
+    vector.stepX = DisplayListIntermediate(dx) / (int) vector.numSteps;
+    vector.stepY = DisplayListIntermediate(dy) / (int) vector.numSteps;
 #endif
 }
 
