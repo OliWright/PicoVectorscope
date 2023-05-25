@@ -20,6 +20,7 @@
 
 #pragma once
 #include "transform3d.h"
+#include "extras/camera.h"
 #include "displaylist.h"
 
 // Construction helper.  You can just pass in const arrays for points and edges
@@ -45,7 +46,7 @@ public:
 
     void Draw(DisplayList& displayList,
               const FixedTransform3D& modelToWorld,
-              const FixedTransform3D& worldToView,
+              const Camera& camera,
               Intensity intensity) const;
     
 private:

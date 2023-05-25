@@ -133,10 +133,10 @@ static void drawClippedLine(DisplayList& displayList, Intensity intensity,
 
 void Shape3D::Draw(DisplayList& displayList,
                    const FixedTransform3D& modelToWorld,
-                   const FixedTransform3D& worldToView,
+                   const Camera& camera,
                    Intensity intensity) const
 {
-    FixedTransform3D modelToView = modelToWorld * worldToView;
+    FixedTransform3D modelToClip = modelToWorld * camera.GetWorldToClip();
 
     // Transform all the points to view space, then screen space (unless clipped)
     StandardFixedTranslationVector* viewSpacePoints = (StandardFixedTranslationVector*) alloca(sizeof(StandardFixedTranslationVector) * m_numPoints);
@@ -144,8 +144,7 @@ void Shape3D::Draw(DisplayList& displayList,
     uint16_t* clipFlags = (uint16_t*) alloca(sizeof(uint16_t) * m_numPoints);
     for (uint32_t i = 0; i < m_numPoints; ++i)
     {
-        modelToView.transformVector(viewSpacePoints[i], m_points[i]);
-        viewSpacePoints[i].x *= (3.f / 4.f);
+        modelToClip.transformVector(viewSpacePoints[i], m_points[i]);
         clipFlags[i] = clipPoint(viewSpacePoints[i]);
         if(clipFlags[i] == 0)
         {
