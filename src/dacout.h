@@ -100,83 +100,54 @@ public:
     // For stats.  How much time was spent with active DMA.
     static uint64_t GetFrameDurationUs() {return s_frameDurationUs;}
 
+    // After the frame's final Flush, this should be called frequently
+    // to enable the remaining pending buffers to be sent to the DACs
     static void Poll();
 
 private:
     constexpr static uint32_t kNumBuffers = 3;
     constexpr static uint32_t kNumEntriesPerBuffer = 4096;
 
-    // We have one DMA channel per buffer.
-    // *** Chaining is currently disabled and work-in-progress ***
-    // *** Instead, DMA channels are manually chained within   ***
-    // *** the interrupt handler                               ***
+    // We have one DmaChannel per buffer, but each one uses two actual
+    // DMA channels in order to allow chaining.
+    // And there's one additional global DMA channel too used in the DMA chain spinning.
     struct DmaChannel
     {
         int m_channelIdx;
         int m_chainSpinChannelIdx;
-        int m_chainToChannelIdx;
         uint32_t* m_pBufferBase;
-        io_wo_32* m_pWriteAddress;
         const DacOutputPioSmConfig* m_pDacOutputPioSmConfigToSet;
         dma_channel_config m_config;
         // This config will be poked to the DacOutput::s_dmaChainSpinChannelIdx
         dma_channel_config m_liveChainSpinConfig;
-        // If the value is this config, then we'll keep spinning
+        // If the live one is this config, then we'll keep spinning
         dma_channel_config m_chainSpinSpinConfig;
-        // If the value is this config, then we'll chain to the next buffer
-        dma_channel_config m_chainSpinChainConfig;
+        // If the live one is this config, then we'll chain to the actual buffer DMA
+        dma_channel_config m_chainSpinEnableConfig;
         volatile bool m_complete;
         bool m_isFinal;
 
-        void Init(uint32_t* pBufferBase, int chainToDmaChannelIdx);
-        void Enable(uint32_t numEntries)
+        void Init(uint32_t* pBufferBase, const DmaChannel& chainTo);
+        void Configure(uint32_t numEntries, const DacOutputPioSmConfig& pioConfig);
+
+        void Enable()
         {
-            dma_channel_set_read_addr(m_channelIdx, m_pBufferBase, false);
-            dma_channel_set_write_addr(m_channelIdx, m_pWriteAddress, false);
-            DisableChaining();
-            dma_channel_set_trans_count(m_channelIdx, numEntries, false);
+            m_liveChainSpinConfig = m_chainSpinEnableConfig;
         }
         void Disable()
         {
-            dma_channel_set_trans_count(m_channelIdx, 0, false);
-            dma_channel_set_read_addr(m_channelIdx, m_pBufferBase, false);
-            m_complete = false;
-            m_pDacOutputPioSmConfigToSet = nullptr;
-            DisableChaining();
-        }
-        bool IsBusy() const { return dma_channel_is_busy(m_channelIdx); }
-        void Wait()
-        {
-            dma_channel_wait_for_finish_blocking(m_channelIdx);
-        }
-        void EnableChaining()
-        {
-            m_liveChainSpinConfig = m_chainSpinChainConfig;
-        }
-        void DisableChaining()
-        {
             m_liveChainSpinConfig = m_chainSpinSpinConfig;
         }
-        bool IsChainingEnabled() const
+        bool IsEnabled() const
         {
-            return m_liveChainSpinConfig.ctrl == m_chainSpinChainConfig.ctrl;
-        }
-        void ConfigurePioSm(io_wo_32* pioTxFifo, uint32_t dreq)
-        {
-            m_pWriteAddress = pioTxFifo;
-            channel_config_set_dreq(&m_config, dreq);
-            dma_channel_set_config(m_channelIdx, &m_config, false);
+            return m_liveChainSpinConfig.ctrl == m_chainSpinEnableConfig.ctrl;
         }
     };
     friend struct DmaChannel;
 
-public:
-    static void wait();
 private:
-    static bool isDmaRunning();
-    static void dmaIrqHandler();
     static void setActivePioSm(const DacOutputPioSmConfig& config);
-    static void configureAndStartDma(const DacOutputPioSmConfig* pioConfig, DmaChannel& previousDmaChannel);
+    static void configurePioAndStartDma(DmaChannel& previousDmaChannel);
     static void checkDmaStatus();
 
 private:

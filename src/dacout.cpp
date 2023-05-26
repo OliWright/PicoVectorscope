@@ -44,10 +44,8 @@ uint32_t s_chainSpinDmaRead = 0;
 uint32_t s_chainSpinDmaWrite = 0;
 
 static bool s_dmaIsRunning = false;
-static uint32_t s_flushKickBufferIdx = 0;
-static uint32_t s_numBuffersToQueueBeforeKick = 1;//DacOutput::kNumBuffers;
+static uint32_t s_numBuffersToQueueBeforeKick;
 
-//static critical_section_t s_dmaCriticalSection = {};
 static mutex_t s_dmaMutex;
 
 static LogChannel DacOutputSynchronisation(false);
@@ -55,7 +53,6 @@ static LogChannel DacOutputSynchronisation(false);
 void DacOutput::Init(const DacOutputPioSmConfig& idleSm)
 {
     s_idlePioSmConfig = &idleSm;
-    //critical_section_init(&s_dmaCriticalSection);
     mutex_init(&s_dmaMutex);
 
     s_dmaChainSpinChannelIdx = dma_claim_unused_channel(true);
@@ -83,8 +80,6 @@ void DacOutput::Init(const DacOutputPioSmConfig& idleSm)
                           false // don't start yet
     );
 
-
-
     // Claim and initialise a DMA channels for each buffer
     for (uint32_t i = 0; i < kNumBuffers; ++i)
     {
@@ -93,23 +88,22 @@ void DacOutput::Init(const DacOutputPioSmConfig& idleSm)
     }
     for (uint32_t i = 0; i < kNumBuffers; ++i)
     {
-        s_dmaChannels[i].Init(s_buffers[i], s_dmaChannels[(i+1)%kNumBuffers].m_channelIdx);
+        s_dmaChannels[i].Init(s_buffers[i], s_dmaChannels[(i+1)%kNumBuffers]);
     }
-    // Start the final DMA channel's spin-chain running
-    s_chainSpinDmaRead = kNumBuffers-1;
-    dma_channel_start(s_dmaChannels[kNumBuffers-1].m_chainSpinChannelIdx);
+    // Start the first DMA channel's spin-chain running
+    s_chainSpinDmaRead = 0;
+    dma_channel_start(s_dmaChannels[0].m_chainSpinChannelIdx);
     s_numBuffersToQueueBeforeKick = kNumBuffers - 1;
 
     // Configure the processor to run dmaIrqHandler() when DMA IRQ 0 is asserted
-    irq_set_exclusive_handler(DMA_IRQ_0, dmaIrqHandler);
-    irq_set_enabled(DMA_IRQ_0, true);
+    //irq_set_exclusive_handler(DMA_IRQ_0, dmaIrqHandler);
+    //irq_set_enabled(DMA_IRQ_0, true);
 
     s_dmaChannels[0].m_complete = false;
 }
 
-void DacOutput::DmaChannel::Init(uint32_t* pBufferBase, int chainToDmaChannelIdx)
+void DacOutput::DmaChannel::Init(uint32_t* pBufferBase, const DacOutput::DmaChannel& chainTo)
 {
-    m_chainToChannelIdx = chainToDmaChannelIdx;
     m_pBufferBase = pBufferBase;
     m_config = dma_channel_get_default_config(m_channelIdx);
     m_complete = true;
@@ -127,9 +121,9 @@ void DacOutput::DmaChannel::Init(uint32_t* pBufferBase, int chainToDmaChannelIdx
     channel_config_set_write_increment(&m_config, false);
     // Disable address wrapping
     channel_config_set_ring(&m_config, false, 0);
-    // Chain to the 'chainSpin' channel when complete
-    channel_config_set_chain_to(&m_config, m_chainSpinChannelIdx);
-    dma_channel_set_irq0_enabled(m_channelIdx, true);
+    // Chain to the next buffer's 'chainSpin' channel when complete
+    channel_config_set_chain_to(&m_config, chainTo.m_chainSpinChannelIdx);
+    dma_channel_set_irq0_enabled(m_channelIdx, false);
 
     // Setup the channel
     dma_channel_configure(m_channelIdx, &m_config,
@@ -166,16 +160,29 @@ void DacOutput::DmaChannel::Init(uint32_t* pBufferBase, int chainToDmaChannelIdx
     );
 
     //
-    // Configure the 'Spin' and 'Chain' configs to control whether the chainspin
-    // DMA will spin or chain to the next buffer
+    // Configure the 'Spin' and 'Enable' configs to control whether the chainspin
+    // DMA will spin or chain to do the buffer DMA
     //
     m_chainSpinSpinConfig = DacOutput::s_dmaChainSpinConfigTemplate;
-    m_chainSpinChainConfig = DacOutput::s_dmaChainSpinConfigTemplate;
+    m_chainSpinEnableConfig = DacOutput::s_dmaChainSpinConfigTemplate;
     // Chain to the 'chainSpin' channel when complete
     channel_config_set_chain_to(&m_chainSpinSpinConfig, m_chainSpinChannelIdx);
-    // Chain to the next buffer channel when complete
-    channel_config_set_chain_to(&m_chainSpinChainConfig, chainToDmaChannelIdx);
+    // Chain to the actual buffer's DMA channel when complete
+    channel_config_set_chain_to(&m_chainSpinEnableConfig, m_channelIdx);
     m_liveChainSpinConfig = m_chainSpinSpinConfig;
+}
+
+void DacOutput::DmaChannel::Configure(uint32_t numEntries, const DacOutputPioSmConfig& pioConfig)
+{
+    channel_config_set_dreq(&m_config, pio_get_dreq(pioConfig.m_pio, pioConfig.m_stateMachine, true));
+    dma_channel_set_config(m_channelIdx, &m_config, false);
+    dma_channel_set_read_addr(m_channelIdx, m_pBufferBase, false);
+    dma_channel_set_write_addr(m_channelIdx, &(pioConfig.m_pio->txf[pioConfig.m_stateMachine]), false);
+    m_liveChainSpinConfig = m_chainSpinSpinConfig;
+    dma_channel_set_trans_count(m_channelIdx, numEntries, false);
+    m_complete = false;
+    m_pDacOutputPioSmConfigToSet = nullptr;
+
 }
 
 void DacOutput::Flush(bool finalFlushForFrame)
@@ -187,128 +194,66 @@ void DacOutput::Flush(bool finalFlushForFrame)
     }
 
     //LOG_INFO(DacOutputSynchronisation, "Flush [%d, %d]\n", s_currentBufferIdx, s_currentEntryIdx);
-    // Our new buffer is ready to go, so let's configure its DMA channel with
-    // the correct size.
+    // Our new buffer is filled up and ready to go, so let's configure its DMA
     DmaChannel& dmaChannel = s_dmaChannels[s_currentBufferIdx];
-    if(finalFlushForFrame)
+    dmaChannel.Configure(s_currentEntryIdx, *s_currentPioConfig);
+    dmaChannel.m_isFinal = finalFlushForFrame;
+
+    mutex_enter_blocking(&s_dmaMutex);
+    ++s_numDmaChannelsQueued;
+
+    if(s_currentPioConfig == s_previousPioConfig)
     {
-        // Tell the DMA to raise IRQ line 0 when the channel finishes a block
-        dmaChannel.m_isFinal = true;
+        // This buffer is a continuation of the previous one, so we can enable it straight away
+        // so that it chains automatically
+        LOG_INFO(DacOutputSynchronisation, "Flush Chained %d\n", s_currentBufferIdx);
+        dmaChannel.Enable();
+        s_chainSpinDmaRead = s_currentBufferIdx;
+    }
+    else
+    {
+        // We can't chain it, because it requires a change in PIO SM program
+        LOG_INFO(DacOutputSynchronisation, "Flush Break %d\n", s_currentBufferIdx);
+        dmaChannel.m_pDacOutputPioSmConfigToSet = s_currentPioConfig;
+        s_previousPioConfig = s_currentPioConfig;
     }
 
-    // Configure the DMA channel for the current PIO program
-    const DacOutputPioSmConfig& pioConfig = *s_currentPioConfig;
-    io_wo_32* pioTxFifo = &(pioConfig.m_pio->txf[pioConfig.m_stateMachine]);
-    uint32_t dreq = pio_get_dreq(pioConfig.m_pio, pioConfig.m_stateMachine, true);
-    dmaChannel.ConfigurePioSm(pioTxFifo, dreq);
-    dmaChannel.m_pDacOutputPioSmConfigToSet = nullptr;
-
-    //critical_section_enter_blocking(&s_dmaCriticalSection);
-    mutex_enter_blocking(&s_dmaMutex);
-        dmaChannel.Enable(s_currentEntryIdx);
-        ++s_numDmaChannelsQueued;
-
-        if(s_currentPioConfig == s_previousPioConfig)
-        {
-            // Enable chaining on the previous DMA channel so that if it's still running,
-            // it will chain to this one automatically
-            const uint32_t previousBufferIdx = (s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers;
-            LOG_INFO(DacOutputSynchronisation, "Flush Chained %d->%d\n", previousBufferIdx, s_currentBufferIdx);
-            s_dmaChannels[previousBufferIdx].EnableChaining();
-            s_chainSpinDmaRead = s_currentBufferIdx;
-        }
-        else
-        {
-            // We can't chain it, because it requires a change in PIO SM program
-            LOG_INFO(DacOutputSynchronisation, "Flush Break %d\n", s_currentBufferIdx);
-            dmaChannel.m_pDacOutputPioSmConfigToSet = s_currentPioConfig;
-            s_previousPioConfig = s_currentPioConfig;
-        }
-
-
-        if(!s_dmaIsRunning && (finalFlushForFrame || (s_numDmaChannelsQueued >= s_numBuffersToQueueBeforeKick)))
-        {
-            // Wait for the first kick until all the buffers are filled, to give us our best chance
-            // of not draining all the buffers.
-            const uint32_t kickBufferIdx = (s_currentBufferIdx + kNumBuffers - s_numDmaChannelsQueued + 1) % kNumBuffers;
-            LOG_INFO(DacOutputSynchronisation, "Flush Kick %d\n", kickBufferIdx);
-            configureAndStartDma(s_dmaChannels[kickBufferIdx].m_pDacOutputPioSmConfigToSet, s_dmaChannels[(kickBufferIdx + kNumBuffers - 1) % kNumBuffers]);
-            s_chainSpinDmaRead = kickBufferIdx;
-            s_dmaIsRunning = true;
-            s_numBuffersToQueueBeforeKick = 1;
-        }
+    if(!s_dmaIsRunning && (finalFlushForFrame || (s_numDmaChannelsQueued >= s_numBuffersToQueueBeforeKick)))
+    {
+        // The DMA isn't currently running (well, it's spinning actually)
+        // So we kick it off here
+        const uint32_t kickBufferIdx = (s_currentBufferIdx + kNumBuffers - s_numDmaChannelsQueued + 1) % kNumBuffers;
+        LOG_INFO(DacOutputSynchronisation, "Flush Kick %d\n", kickBufferIdx);
+        configurePioAndStartDma(s_dmaChannels[kickBufferIdx]);
+        s_chainSpinDmaRead = kickBufferIdx;
+        s_dmaIsRunning = true;
+        s_numBuffersToQueueBeforeKick = 1; // Don't wait anymore for multiple buffers to be filled
+    }
     mutex_exit(&s_dmaMutex);
-    //critical_section_exit(&s_dmaCriticalSection);
-
-    // Move on to the next buffer
+    
+    // Move on to the next buffer for filling in
     if (++s_currentBufferIdx == kNumBuffers)
     {
         s_currentBufferIdx = 0;
     }
     s_currentEntryIdx = 0;
-    // Wait for the DMA to complete on our new buffer.
+    // Wait for the DMA to complete on this new buffer.
     DmaChannel& nextDmaChannel = s_dmaChannels[s_currentBufferIdx];
     //LOG_INFO(DacOutputSynchronisation, "Wait [%d]\n", s_currentBufferIdx);
     while(!nextDmaChannel.m_complete)
     {
+        tight_loop_contents();
         checkDmaStatus();
-        //tight_loop_contents();
     }
     //LOG_INFO(DacOutputSynchronisation, "Done [%d]\n", s_currentBufferIdx);
 
-    //nextDmaChannel.Wait();
-    // Prevent this channel from doing anything before we've finished filling in its buffer
-    nextDmaChannel.Disable();
-
     if(finalFlushForFrame)
     {
-        // The IRQ handler might put the PIO into idle state at the end of the 
-        // frame if there's nothing left to do.
-        // So let's make sure that we always assert the correct PIO SM program
+        // Let's make sure that we always assert the correct PIO SM program
         // for the first flush of the next frame
         s_previousPioConfig = nullptr;
-        s_numBuffersToQueueBeforeKick = 1;//kNumBuffers;
+        s_numBuffersToQueueBeforeKick = kNumBuffers - 1;
     }
-
-}
-
-bool DacOutput::isDmaRunning()
-{
-    for (uint32_t i = 1; i <= kNumBuffers; ++i)
-    {
-        if (s_dmaChannels[(s_currentBufferIdx + i) % kNumBuffers].IsBusy())
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-void DacOutput::wait()
-{
-    LOG_INFO(DacOutputSynchronisation, "Big wait: [");
-    while(s_numDmaChannelsQueued > 0)
-    {
-        tight_loop_contents();
-    }
-    LOG_INFO(DacOutputSynchronisation, "]\n");
-}
-
-//static uint32_t s_int0Bits = 0;
-
-void DacOutput::dmaIrqHandler()
-{
-    uint32_t int0Bits = dma_hw->ints0;
-    hw_set_bits(&dma_hw->ints0, int0Bits);
-#if 0
-    mutex_enter_blocking(&s_dmaMutex);
-    s_int0Bits |= int0Bits;
-    mutex_exit(&s_dmaMutex);
-    //dma_hw->ints0 = int0Bits;
-    //DmaChannel& dmaChannel = s_dmaChannels[s_nextBufferIrq];
-    //dma_channel_acknowledge_irq0(dmaChannel.m_channelIdx);
-    //dma_hw->ints0 = (1u << dmaChannel.m_channelIdx);
-#endif    
 }
 
 void DacOutput::checkDmaStatus()
@@ -318,29 +263,18 @@ void DacOutput::checkDmaStatus()
         return;
     }
     DmaChannel& dmaChannel = s_dmaChannels[s_nextBufferIrq];
-    //dma_channel_acknowledge_irq0(dmaChannel.m_channelIdx);
-    //dma_hw->ints0 = (1u << dmaChannel.m_channelIdx);
-    //uint32_t channelBit = (1u << dmaChannel.m_channelIdx);
     if(dma_hw->ch[dmaChannel.m_channelIdx].transfer_count > 0)
-    //if(dma_channel_is_busy(dmaChannel.m_channelIdx))
-    //if((s_int0Bits & channelBit) == 0)
     {
-        //LOG_INFO(DacOutputSynchronisation, "DMA busy\n", s_nextBufferIrq);
         return;
     }
-    sleep_us(100);
 
-    //mutex_enter_blocking(&s_dmaMutex);
-    //s_int0Bits &= ~channelBit;
-    //mutex_exit(&s_dmaMutex);
-    //dma_channel_acknowledge_irq0(dmaChannel.m_channelIdx);
-    //dma_hw->ints0 = channelBit;
-
-    //critical_section_enter_blocking(&s_dmaCriticalSection);
-    mutex_enter_blocking(&s_dmaMutex);
-    //LOG_INFO(DacOutputSynchronisation, "IRQ %d %d\n", s_nextBufferIrq, dma_channel_get_irq0_status(dmaChannel.m_channelIdx) ? 1 : 0);
-    bool makeIdle = false;
+    // This DMA channel has completed.
+    // Prevent it from running again until we enable it
+    dmaChannel.Disable();
     assert(!dmaChannel.m_complete);
+
+    mutex_enter_blocking(&s_dmaMutex);
+    bool makeIdle = false;
     if(dmaChannel.m_isFinal)
     {
         dmaChannel.m_isFinal = false;
@@ -354,33 +288,31 @@ void DacOutput::checkDmaStatus()
 
     if((--s_numDmaChannelsQueued > 0))
     {
-        // There are more buffers queued.
-        // But chaining would have been used unless a change in PIO SM program
-        // is required.
+        // There are more buffers queued.  Let's look at the next one...
         DmaChannel& nextDmaChannel = s_dmaChannels[s_nextBufferIrq];
-        // We need to configure the PIO, and kick off
-        // this DMA channel right here.
-        
         if(nextDmaChannel.m_pDacOutputPioSmConfigToSet != nullptr)
         {
-            LOG_INFO(DacOutputSynchronisation, "IRQ Kick %d\n", s_nextBufferIrq);
-            assert(!dmaChannel.IsChainingEnabled());
-            configureAndStartDma(nextDmaChannel.m_pDacOutputPioSmConfigToSet, dmaChannel);
+            // There's a change in PIO SM program, so the next buffer is currently
+            // disabled.  We can kick it off now though.
+            assert(!nextDmaChannel.IsEnabled());
+            LOG_INFO(DacOutputSynchronisation, "Kick %d\n", s_nextBufferIrq);
+            configurePioAndStartDma(nextDmaChannel);
             makeIdle = false;
         }
         else
         {
-            LOG_INFO(DacOutputSynchronisation, "IRQ Chained %d->%d\n", completedBufferIdx, s_nextBufferIrq);
-            assert(dmaChannel.IsChainingEnabled());
+            // The next buffer is already enabled (chained), so we don't need
+            // to do anything
+            assert(nextDmaChannel.IsEnabled());
+            LOG_INFO(DacOutputSynchronisation, "Chained %d->%d\n", completedBufferIdx, s_nextBufferIrq);
         }
     }
     else
     {
-        // DMA has been drained, so will be left spinning
-        LOG_INFO(DacOutputSynchronisation, "IRQ Drained %d\n", completedBufferIdx);
-        assert(!dmaChannel.IsChainingEnabled());
+        // There are no more buffers queued, so the DMA has been drained.
+        // It will be restarted at the next Flush
+        LOG_INFO(DacOutputSynchronisation, "Drained %d\n", completedBufferIdx);
         s_dmaIsRunning = false;
-        s_flushKickBufferIdx = s_nextBufferIrq;
     }
 
     if(makeIdle)
@@ -391,17 +323,15 @@ void DacOutput::checkDmaStatus()
         s_numBuffersToQueueBeforeKick = kNumBuffers - 1;
     }
     
+    // Marking this channel as complete allows its buffer to be refilled
     dmaChannel.m_complete = true;
-    //LOG_INFO(DacOutputSynchronisation, "IRQ End\n");
     mutex_exit(&s_dmaMutex);
-    //critical_section_exit(&s_dmaCriticalSection);
 }
 
 void DacOutput::Poll()
 {
     checkDmaStatus();
 }
-
 
 void DacOutput::setActivePioSm(const DacOutputPioSmConfig& config)
 {
@@ -426,17 +356,17 @@ void DacOutput::setActivePioSm(const DacOutputPioSmConfig& config)
     }
 }
 
-void DacOutput::configureAndStartDma(const DacOutputPioSmConfig* pioConfig, DmaChannel& previousDmaChannel)
+void DacOutput::configurePioAndStartDma(DmaChannel& dmaChannel)
 {
     if(s_frameStartUs == 0)
     {
         s_frameStartUs = time_us_64();
     }
-    if(pioConfig != nullptr)
+    if(dmaChannel.m_pDacOutputPioSmConfigToSet != nullptr)
     {
-        setActivePioSm(*pioConfig);
+        setActivePioSm(*dmaChannel.m_pDacOutputPioSmConfigToSet);
     }
-    previousDmaChannel.EnableChaining();
+    dmaChannel.Enable();
 }
 
 void DacOutput::SetCurrentPioSm(const DacOutputPioSmConfig& config)
