@@ -1,4 +1,4 @@
-// Fixed point sin lookup table, with static class lookup helpers.
+// Dumping ground for maths helper functions.
 //
 // Copyright (C) 2022 Oli Wright
 //
@@ -18,18 +18,17 @@
 //
 // oli.wright.github@gmail.com
 
-#include "sintable.h"
+#pragma once
+#include "types.h"
 
-#include "pico/float.h"
-
-
-SinTable::SinTable() : LookUpTable<SinTableValue>(4096, true, kPi * 2.f)
+template <typename T>
+T::ScalarType dot(const T& a, const T& b)
 {
-    SinTableValue* pTable = (SinTableValue*)m_table;
-    for (uint32_t i = 0; i < m_numValues; ++i)
-    {
-        pTable[i] = sinf(kPi * 2.f * i / (float)m_numValues);
-    }
+    return (a.x * a.x) + (a.y * a.y) + (a.z * a.z);
 }
 
-SinTable SinTable::s_sinTable;
+template <typename T>
+T cross(const T& a, const T& b)
+{
+    return T(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}

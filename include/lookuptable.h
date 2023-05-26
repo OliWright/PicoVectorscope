@@ -26,7 +26,7 @@
 class LookUpTableBase
 {
 public:
-    typedef FixedPoint<4, 12, uint32_t, uint32_t, false> Index;
+    typedef FixedPoint<4, 14, uint32_t, uint32_t, false> Index;
 
 protected:
     LookUpTableBase(uint32_t valueSize, uint32_t numValues, bool wrapped, Index endIndex);
