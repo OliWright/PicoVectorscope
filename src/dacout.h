@@ -58,6 +58,7 @@ public:
         }
         pBufferSpace = s_buffers[s_currentBufferIdx] + s_currentEntryIdx;
         s_currentEntryIdx += outNumEntriesAllocated;
+        checkDmaStatus();
         return pBufferSpace;
     }
 
@@ -99,6 +100,8 @@ public:
     // For stats.  How much time was spent with active DMA.
     static uint64_t GetFrameDurationUs() {return s_frameDurationUs;}
 
+    static void Poll();
+
 private:
     constexpr static uint32_t kNumBuffers = 3;
     constexpr static uint32_t kNumEntriesPerBuffer = 4096;
@@ -110,11 +113,18 @@ private:
     struct DmaChannel
     {
         int m_channelIdx;
+        int m_chainSpinChannelIdx;
+        int m_chainToChannelIdx;
         uint32_t* m_pBufferBase;
         io_wo_32* m_pWriteAddress;
         const DacOutputPioSmConfig* m_pDacOutputPioSmConfigToSet;
-        dma_channel_config m_configWithChain;
-        dma_channel_config m_configWithoutChain;
+        dma_channel_config m_config;
+        // This config will be poked to the DacOutput::s_dmaChainSpinChannelIdx
+        dma_channel_config m_liveChainSpinConfig;
+        // If the value is this config, then we'll keep spinning
+        dma_channel_config m_chainSpinSpinConfig;
+        // If the value is this config, then we'll chain to the next buffer
+        dma_channel_config m_chainSpinChainConfig;
         volatile bool m_complete;
         bool m_isFinal;
 
@@ -139,25 +149,26 @@ private:
         {
             dma_channel_wait_for_finish_blocking(m_channelIdx);
         }
-        void Start()
-        {
-            dma_channel_start(m_channelIdx);
-        }
         void EnableChaining()
         {
-            dma_channel_set_config(m_channelIdx, &m_configWithChain, false);
+            m_liveChainSpinConfig = m_chainSpinChainConfig;
         }
         void DisableChaining()
         {
-            dma_channel_set_config(m_channelIdx, &m_configWithoutChain, false);
+            m_liveChainSpinConfig = m_chainSpinSpinConfig;
+        }
+        bool IsChainingEnabled() const
+        {
+            return m_liveChainSpinConfig.ctrl == m_chainSpinChainConfig.ctrl;
         }
         void ConfigurePioSm(io_wo_32* pioTxFifo, uint32_t dreq)
         {
             m_pWriteAddress = pioTxFifo;
-            channel_config_set_dreq(&m_configWithChain, dreq);
-            channel_config_set_dreq(&m_configWithoutChain, dreq);
+            channel_config_set_dreq(&m_config, dreq);
+            dma_channel_set_config(m_channelIdx, &m_config, false);
         }
     };
+    friend struct DmaChannel;
 
 public:
     static void wait();
@@ -165,11 +176,15 @@ private:
     static bool isDmaRunning();
     static void dmaIrqHandler();
     static void setActivePioSm(const DacOutputPioSmConfig& config);
-    static void configureAndStartDma(const DacOutputPioSmConfig& pioConfig, DmaChannel& dmaChannel);
+    static void configureAndStartDma(const DacOutputPioSmConfig* pioConfig, DmaChannel& previousDmaChannel);
+    static void checkDmaStatus();
 
 private:
     static const DacOutputPioSmConfig* s_currentPioConfig;
     static const DacOutputPioSmConfig* s_previousPioConfig;
+    static int          s_dmaChainSpinChannelIdx;
+    static volatile uint32_t* s_dmaChainSpinCtrl;
+    static dma_channel_config s_dmaChainSpinConfigTemplate;
     static DmaChannel   s_dmaChannels[kNumBuffers];
     static uint32_t     s_buffers[kNumBuffers][kNumEntriesPerBuffer];
     static uint32_t     s_currentBufferIdx;

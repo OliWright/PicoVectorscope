@@ -151,7 +151,11 @@ void dacOutputLoop()
     // Lock the mutex for the next frame's DisplayList
     uint32_t nextDisplayListIdx = 1 - s_outputDisplayListIdx;
     LOG_INFO(FrameSynchronisation, "DO W: %d\n", nextDisplayListIdx);
-    mutex_enter_blocking(s_displayListMutex + nextDisplayListIdx);
+    //mutex_enter_blocking(s_displayListMutex + nextDisplayListIdx);
+    while(!mutex_try_enter(s_displayListMutex + nextDisplayListIdx, nullptr))
+    {
+        DacOutput::Poll();
+    }
     // Only then do we release this frame's DisplayList
     mutex_exit(s_displayListMutex + s_outputDisplayListIdx);
     s_outputDisplayListIdx = nextDisplayListIdx;
