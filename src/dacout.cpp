@@ -50,7 +50,7 @@ static uint32_t s_numBuffersToQueueBeforeKick = 1;//DacOutput::kNumBuffers;
 //static critical_section_t s_dmaCriticalSection = {};
 static mutex_t s_dmaMutex;
 
-static LogChannel DacOutputSynchronisation(true);
+static LogChannel DacOutputSynchronisation(false);
 
 void DacOutput::Init(const DacOutputPioSmConfig& idleSm)
 {
@@ -98,7 +98,7 @@ void DacOutput::Init(const DacOutputPioSmConfig& idleSm)
     // Start the final DMA channel's spin-chain running
     s_chainSpinDmaRead = kNumBuffers-1;
     dma_channel_start(s_dmaChannels[kNumBuffers-1].m_chainSpinChannelIdx);
-    s_numBuffersToQueueBeforeKick = kNumBuffers;
+    s_numBuffersToQueueBeforeKick = kNumBuffers - 1;
 
     // Configure the processor to run dmaIrqHandler() when DMA IRQ 0 is asserted
     irq_set_exclusive_handler(DMA_IRQ_0, dmaIrqHandler);
@@ -186,7 +186,7 @@ void DacOutput::Flush(bool finalFlushForFrame)
         return;
     }
 
-    LOG_INFO(DacOutputSynchronisation, "Flush [%d, %d]\n", s_currentBufferIdx, s_currentEntryIdx);
+    //LOG_INFO(DacOutputSynchronisation, "Flush [%d, %d]\n", s_currentBufferIdx, s_currentEntryIdx);
     // Our new buffer is ready to go, so let's configure its DMA channel with
     // the correct size.
     DmaChannel& dmaChannel = s_dmaChannels[s_currentBufferIdx];
@@ -204,7 +204,7 @@ void DacOutput::Flush(bool finalFlushForFrame)
     dmaChannel.m_pDacOutputPioSmConfigToSet = nullptr;
 
     //critical_section_enter_blocking(&s_dmaCriticalSection);
-    //mutex_enter_blocking(&s_dmaMutex);
+    mutex_enter_blocking(&s_dmaMutex);
         dmaChannel.Enable(s_currentEntryIdx);
         ++s_numDmaChannelsQueued;
 
@@ -213,14 +213,14 @@ void DacOutput::Flush(bool finalFlushForFrame)
             // Enable chaining on the previous DMA channel so that if it's still running,
             // it will chain to this one automatically
             const uint32_t previousBufferIdx = (s_currentBufferIdx + kNumBuffers - 1) % kNumBuffers;
-            LOG_INFO(DacOutputSynchronisation, "Chain [%d, %d]\n", previousBufferIdx, s_currentBufferIdx);
+            LOG_INFO(DacOutputSynchronisation, "Flush Chained %d->%d\n", previousBufferIdx, s_currentBufferIdx);
             s_dmaChannels[previousBufferIdx].EnableChaining();
             s_chainSpinDmaRead = s_currentBufferIdx;
         }
         else
         {
             // We can't chain it, because it requires a change in PIO SM program
-            LOG_INFO(DacOutputSynchronisation, "Flush SetSM %d\n", s_currentBufferIdx);
+            LOG_INFO(DacOutputSynchronisation, "Flush Break %d\n", s_currentBufferIdx);
             dmaChannel.m_pDacOutputPioSmConfigToSet = s_currentPioConfig;
             s_previousPioConfig = s_currentPioConfig;
         }
@@ -230,14 +230,14 @@ void DacOutput::Flush(bool finalFlushForFrame)
         {
             // Wait for the first kick until all the buffers are filled, to give us our best chance
             // of not draining all the buffers.
-            const uint32_t kickBufferIdx = (s_currentBufferIdx + kNumBuffers - s_numDmaChannelsQueued) % kNumBuffers;
+            const uint32_t kickBufferIdx = (s_currentBufferIdx + kNumBuffers - s_numDmaChannelsQueued + 1) % kNumBuffers;
             LOG_INFO(DacOutputSynchronisation, "Flush Kick %d\n", kickBufferIdx);
             configureAndStartDma(s_dmaChannels[kickBufferIdx].m_pDacOutputPioSmConfigToSet, s_dmaChannels[(kickBufferIdx + kNumBuffers - 1) % kNumBuffers]);
             s_chainSpinDmaRead = kickBufferIdx;
             s_dmaIsRunning = true;
             s_numBuffersToQueueBeforeKick = 1;
         }
-    //mutex_exit(&s_dmaMutex);
+    mutex_exit(&s_dmaMutex);
     //critical_section_exit(&s_dmaCriticalSection);
 
     // Move on to the next buffer
@@ -248,13 +248,13 @@ void DacOutput::Flush(bool finalFlushForFrame)
     s_currentEntryIdx = 0;
     // Wait for the DMA to complete on our new buffer.
     DmaChannel& nextDmaChannel = s_dmaChannels[s_currentBufferIdx];
-    LOG_INFO(DacOutputSynchronisation, "Wait [%d]\n", s_currentBufferIdx);
+    //LOG_INFO(DacOutputSynchronisation, "Wait [%d]\n", s_currentBufferIdx);
     while(!nextDmaChannel.m_complete)
     {
         checkDmaStatus();
         //tight_loop_contents();
     }
-    LOG_INFO(DacOutputSynchronisation, "Done [%d]\n", s_currentBufferIdx);
+    //LOG_INFO(DacOutputSynchronisation, "Done [%d]\n", s_currentBufferIdx);
 
     //nextDmaChannel.Wait();
     // Prevent this channel from doing anything before we've finished filling in its buffer
@@ -325,9 +325,11 @@ void DacOutput::checkDmaStatus()
     //if(dma_channel_is_busy(dmaChannel.m_channelIdx))
     //if((s_int0Bits & channelBit) == 0)
     {
-        LOG_INFO(DacOutputSynchronisation, "DMA busy\n", s_nextBufferIrq);
+        //LOG_INFO(DacOutputSynchronisation, "DMA busy\n", s_nextBufferIrq);
         return;
     }
+    sleep_us(100);
+
     //mutex_enter_blocking(&s_dmaMutex);
     //s_int0Bits &= ~channelBit;
     //mutex_exit(&s_dmaMutex);
@@ -335,8 +337,8 @@ void DacOutput::checkDmaStatus()
     //dma_hw->ints0 = channelBit;
 
     //critical_section_enter_blocking(&s_dmaCriticalSection);
-    //mutex_enter_blocking(&s_dmaMutex);
-    LOG_INFO(DacOutputSynchronisation, "IRQ %d %d\n", s_nextBufferIrq, dma_channel_get_irq0_status(dmaChannel.m_channelIdx) ? 1 : 0);
+    mutex_enter_blocking(&s_dmaMutex);
+    //LOG_INFO(DacOutputSynchronisation, "IRQ %d %d\n", s_nextBufferIrq, dma_channel_get_irq0_status(dmaChannel.m_channelIdx) ? 1 : 0);
     bool makeIdle = false;
     assert(!dmaChannel.m_complete);
     if(dmaChannel.m_isFinal)
@@ -347,6 +349,7 @@ void DacOutput::checkDmaStatus()
         makeIdle = true;
     }
 
+    const uint32_t completedBufferIdx = s_nextBufferIrq;
     s_nextBufferIrq = (s_nextBufferIrq + 1) % kNumBuffers;
 
     if((--s_numDmaChannelsQueued > 0))
@@ -361,19 +364,21 @@ void DacOutput::checkDmaStatus()
         if(nextDmaChannel.m_pDacOutputPioSmConfigToSet != nullptr)
         {
             LOG_INFO(DacOutputSynchronisation, "IRQ Kick %d\n", s_nextBufferIrq);
+            assert(!dmaChannel.IsChainingEnabled());
             configureAndStartDma(nextDmaChannel.m_pDacOutputPioSmConfigToSet, dmaChannel);
             makeIdle = false;
         }
         else
         {
-            LOG_INFO(DacOutputSynchronisation, "IRQ Chained %d\n", s_nextBufferIrq);
+            LOG_INFO(DacOutputSynchronisation, "IRQ Chained %d->%d\n", completedBufferIdx, s_nextBufferIrq);
             assert(dmaChannel.IsChainingEnabled());
         }
     }
     else
     {
         // DMA has been drained, so will be left spinning
-        LOG_INFO(DacOutputSynchronisation, "IRQ Drained\n");
+        LOG_INFO(DacOutputSynchronisation, "IRQ Drained %d\n", completedBufferIdx);
+        assert(!dmaChannel.IsChainingEnabled());
         s_dmaIsRunning = false;
         s_flushKickBufferIdx = s_nextBufferIrq;
     }
@@ -383,12 +388,12 @@ void DacOutput::checkDmaStatus()
         // Activate the idle SM
         LOG_INFO(DacOutputSynchronisation, "Setting idle\n");
         setActivePioSm(*s_idlePioSmConfig);
-        s_numBuffersToQueueBeforeKick = kNumBuffers;
+        s_numBuffersToQueueBeforeKick = kNumBuffers - 1;
     }
     
     dmaChannel.m_complete = true;
-    LOG_INFO(DacOutputSynchronisation, "IRQ End\n");
-    //mutex_exit(&s_dmaMutex);
+    //LOG_INFO(DacOutputSynchronisation, "IRQ End\n");
+    mutex_exit(&s_dmaMutex);
     //critical_section_exit(&s_dmaCriticalSection);
 }
 
@@ -417,7 +422,7 @@ void DacOutput::setActivePioSm(const DacOutputPioSmConfig& config)
         // Turn on the new PIO SM
         config.SetEnabled(true);
         s_activePioSmConfig = &config;
-        LOG_INFO(DacOutputSynchronisation, "Done Switch SM: %d\n", config.m_id);
+        //LOG_INFO(DacOutputSynchronisation, "Done Switch SM: %d\n", config.m_id);
     }
 }
 

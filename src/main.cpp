@@ -138,8 +138,12 @@ void dacOutputLoop()
     uint64_t        frameDuration = frameEnd - frameStart;
     if (frameDuration < s_numMicrosBetweenFrames)
     {
-        sleep_us(s_numMicrosBetweenFrames - frameDuration);
         /*next*/ frameStart += s_numMicrosBetweenFrames;
+        while(time_us_64() < frameStart)
+        {
+            DacOutput::Poll();
+            sleep_us(50);
+        }
     }
     else
     {
