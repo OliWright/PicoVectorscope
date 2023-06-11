@@ -18,6 +18,7 @@
 //
 // oli.wright.github@gmail.com
 
+#pragma once
 #include "transform3d.h"
 
 class Camera
@@ -36,7 +37,7 @@ public:
     // `tanHalfVerticalFOV` isn't as scary as it sounds.  For a 90 degree vertical
     // field of view, you would pass 1, because tan(90/2) == 1
     // Smaller numbers will linearly scale the field of view, effectively zooming in.
-    void SetTanHalfVerticalFOV(StandardFixedOrientationScalar tanHalfVerticalFOV) { m_recipTanHalfVerticalFOV = tanHalfVerticalFOV.recip(); }
+    void SetTanHalfVerticalFOV(StandardFixedOrientationScalar tanHalfVerticalFOV) { m_recipTanHalfVerticalFOV = Recip(tanHalfVerticalFOV); }
 
     // After changing the cameraToWorld transform, or the field of view, you must call
     // Calculate to update the internal fields.
@@ -53,6 +54,8 @@ public:
         m_worldToClip.m[2][1] *= m_recipTanHalfVerticalFOV;
         m_worldToClip.t.y *= m_recipTanHalfVerticalFOV;
     }
+
+    const StandardFixedTranslationVector& GetPosition() const { return m_cameraToWorld.t; }
 
     // The worldToClip transform is used to transform points from world space to
     // clip space.
