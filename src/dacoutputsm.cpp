@@ -38,8 +38,8 @@ struct ProgramInfo
     uint16_t m_clockDivider;
 };
 static const ProgramInfo s_programInfo[] = {
-    {&idle_program,   idle_wrap_target,   idle_wrap,   2, 32},
-    {&vector_program, vector_wrap_target, vector_wrap, 3, 3},
+    {&idle_program,   idle_wrap_target,   idle_wrap,   2, 8},
+    {&vector_program, vector_wrap_target, vector_wrap, 3, 4},
     {&points_program, points_wrap_target, points_wrap, 2, 32},
     {&raster_program, raster_wrap_target, raster_wrap, 2, 1},
 };
