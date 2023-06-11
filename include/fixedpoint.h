@@ -57,6 +57,7 @@ int32_t FixedPointSqrt(int32_t inValue, int32_t numFractionalBits);
 // 32-bit pseudo random number generator
 uint32_t SimpleRand();
 extern uint32_t g_randSeed;
+typedef unsigned int uint;
 
 // This will shift right if shift is +ve, or shift left is shift is -ve
 template <typename T>
@@ -117,6 +118,12 @@ constexpr static inline typename TA::IntermediateType Mul(TA a, TB b)
     return typename TA::IntermediateType(SignedShift(sa * sb, kPostshiftBits));
 }
 
+template <int numWholeBitsA>
+constexpr static inline float Div(float a, float b)
+{
+    return a / b;
+}
+
 template <int numWholeBitsA, typename TA, typename TB>
 constexpr static inline typename TA::IntermediateType Div(TA a, TB b)
 {
@@ -173,20 +180,29 @@ public:
 
     constexpr FixedPoint() {}
 
-    // Construct from some other format
-    template <typename T>
-    constexpr FixedPoint(const T& rhs) : m_storage(fromOtherFormat(rhs).getStorage())
-    {
-    }
+    // Allow implicit construction from some other fixed point format
+    template <int rhsNumWhole, int rhsNumFrac, typename rhsTStorage, typename rhsTIntermediateStorage, bool rhsDoClamping>
+    constexpr FixedPoint(const FixedPoint<rhsNumWhole, rhsNumFrac, rhsTStorage, rhsTIntermediateStorage, rhsDoClamping>& rhs)
+    : m_storage(fromOtherFormat(rhs).getStorage())
+    {}
 
     // Explicit construction from the StorageType will just store that value directly.
     explicit constexpr FixedPoint(StorageType storage) : m_storage(storage) {}
 
-    // Cast to float must be excplicit, to prevent accidents
+    // Allow implicit construction from float
+    constexpr FixedPoint(float rhs) : m_storage(fromOtherFormat(rhs).getStorage()) {}
+
+    // Allow implicit construction from int
+    constexpr FixedPoint(int rhs) : m_storage((StorageType)(int)((uint)rhs << kNumFractionalBits)) {}
+
+    // Allow implicit construction from uint
+    constexpr FixedPoint(uint rhs) : m_storage(rhs << kNumFractionalBits) {}
+
+    // Cast to float must be explicit, to prevent accidents
     explicit constexpr operator float() const { return toFloat(); }
-    // Cast to int must be excplicit, to prevent accidents
+    // Cast to int must be explicit, to prevent accidents
     explicit constexpr operator int() const { return (int)(m_storage >> kNumFractionalBits); }
-    // Cast to unsigned int must be excplicit, to prevent accidents
+    // Cast to unsigned int must be explicit, to prevent accidents
     explicit constexpr operator unsigned int() const { return (unsigned int)(m_storage >> kNumFractionalBits); }
 
     template <typename T>
@@ -305,7 +321,12 @@ public:
         return IntermediateType((IntermediateStorageType)m_storage & kFractionalBitsMask);
     }
 
-    constexpr IntermediateType abs() const { return (*this < 0) ? -*this : *this; }
+    constexpr IntermediateType round() const
+    {
+        return IntermediateType((*this + 0.5f).m_storage & ~kFractionalBitsMask);
+    }
+
+    constexpr IntermediateType abs() const { return (*this < 0) ? (IntermediateType) -*this : (IntermediateType) *this; }
 
     constexpr IntermediateType recip() const { return Div<1>(IntermediateType(1.f), *this); }
 
@@ -359,11 +380,86 @@ static inline T saturate(const T& val)
     return (val > 1.f) ? 1.f : (val < 0.f) ? 0.f : val;
 }
 
-// Free operator, float * FixedPoint
+//
+// Some free operators, with float as the lhs.
+// We do this, rather than have an implicit cast to float because then
+// it's safer against accidental float usage
+//
 template <int numWholeBits, int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping>
 static inline float operator * (float a, FixedPoint<numWholeBits, numFractionalBits, TStorageType, TIntermediateStorageType, doClamping> b)
 {
     return a * (float) b;
 }
 
+#if 0 // We can't override the assignment operator
+template <int numWholeBits, int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping>
+static inline float& operator = (float& a, FixedPoint<numWholeBits, numFractionalBits, TStorageType, TIntermediateStorageType, doClamping> b)
+{
+    a = (float) b;
+    return a;
+}
+#endif
+
+template <int numWholeBits, int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping>
+static inline float& operator += (float& a, FixedPoint<numWholeBits, numFractionalBits, TStorageType, TIntermediateStorageType, doClamping> b)
+{
+    a = a + (float) b;
+    return a;
+}
+
+template <int numWholeBits, int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping>
+static inline float& operator -= (float& a, FixedPoint<numWholeBits, numFractionalBits, TStorageType, TIntermediateStorageType, doClamping> b)
+{
+    a = a - (float) b;
+    return a;
+}
+
+template <int numWholeBits, int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping>
+static inline bool operator < (float a, FixedPoint<numWholeBits, numFractionalBits, TStorageType, TIntermediateStorageType, doClamping> b)
+{
+    return a < (float) b;
+}
+
+template <int numWholeBits, int numFractionalBits, typename TStorageType, typename TIntermediateStorageType, bool doClamping>
+static inline bool operator > (float a, FixedPoint<numWholeBits, numFractionalBits, TStorageType, TIntermediateStorageType, doClamping> b)
+{
+    return a > (float) b;
+}
+
+//
+// Some free-function helpers, with specialistion for float types.
+// Prefer these over the member variables, because it makes it easier to
+// temporarily switch your fixed-point types to floats, to help debugging
+//
+constexpr static inline float Recip(float a)
+{
+    return 1.f / a;
+}
+template <typename  TA>
+constexpr static inline typename TA::IntermediateType Recip(TA a)
+{
+    return a.recip();
+}
+
+constexpr static inline float Round(float a)
+{
+    return (float) int(a+0.5f);
+}
+template <typename  TA>
+constexpr static inline typename TA::IntermediateType Round(TA a)
+{
+    return a.round();
+}
+
+constexpr static inline float Abs(float a)
+{
+    return (a < 0.f) ? -a : a;
+}
+template <typename  TA>
+constexpr static inline typename TA::IntermediateType Abs(TA a)
+{
+    return a.abs();
+}
+
+// Unit tests
 void TestFixedPoint();
