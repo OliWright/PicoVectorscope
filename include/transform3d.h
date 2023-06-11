@@ -33,17 +33,40 @@ struct Transform3D
     OrientationVector3Type m[3];
     TranslationVector3Type t;
 
-    void setAsIdentity()
+    // Default constructor will leave all members uninitialised
+    // (cannot be used constexpr)
+    Transform3D() {}
+
+    //
+    // Some constexpr constructors that will initialise all members
+    //
+
+    // Identity orientation, with a specified translation
+    explicit constexpr Transform3D(const TranslationVector3Type& translation)
+    : m{{1,0,0}, {0,1,0}, {0,0,1}}
+    , t(translation)
+    {}
+    // Scale, with a zero translation
+    explicit constexpr Transform3D(const OrientationVector3Type& scale)
+    : m{{scale.x,0,0}, {0,scale.y,0}, {0,0,scale.z}}
+    , t(0,0,0)
+    {}
+    // Scale and translation
+    explicit constexpr Transform3D(const TranslationVector3Type& translation, const OrientationVector3Type& scale)
+    : m{{scale.x,0,0}, {0,scale.y,0}, {0,0,scale.z}}
+    , t(translation)
+    {}
+
+    constexpr void setOrientationAsIdentity()
     {
-        m[0][0] = 1.f;
-        m[0][1] = 0.f;
-        m[0][2] = 0.f;
-        m[1][0] = 0.f;
-        m[1][1] = 1.f;
-        m[1][2] = 0.f;
-        m[2][0] = 0.f;
-        m[2][1] = 0.f;
-        m[2][2] = 1.f;
+        m[0] = OrientationVector3Type(1,0,0);
+        m[1] = OrientationVector3Type(0,1,0);
+        m[2] = OrientationVector3Type(0,0,1);
+    }
+
+    constexpr void setAsIdentity()
+    {
+        setOrientationAsIdentity();
         t[0] = 0.f;
         t[1] = 0.f;
         t[2] = 0.f;
@@ -78,11 +101,23 @@ struct Transform3D
         t.z += translation.z;
     }
 
-    Transform3D& operator*=(OrientationType scale)
+    constexpr Transform3D& operator*=(OrientationType scale)
     {
         m[0] *= scale;
         m[1] *= scale;
         m[2] *= scale;
+
+        return *this;
+    }
+
+    constexpr Transform3D& operator*=(const OrientationVector3Type& scale)
+    {
+        m[0] *= scale.x;
+        m[1] *= scale.y;
+        m[2] *= scale.z;
+        t.x *= scale.x;
+        t.y *= scale.y;
+        t.z *= scale.z;
 
         return *this;
     }
@@ -160,7 +195,8 @@ typedef float StandardFixedOrientationScalar;
 typedef float StandardFixedTranslationScalar;
 #else
 typedef FixedPoint<3,16,int32_t,int64_t,false> StandardFixedOrientationScalar;
-typedef FixedPoint<12,8,int32_t,int64_t,false> StandardFixedTranslationScalar;
+typedef FixedPoint<12,16,int32_t,int64_t,false> StandardFixedTranslationScalar;
 #endif
+typedef Vector3<StandardFixedOrientationScalar> StandardFixedOrientationVector;
 typedef Vector3<StandardFixedTranslationScalar> StandardFixedTranslationVector;
 typedef Transform3D<StandardFixedOrientationScalar, StandardFixedTranslationScalar> FixedTransform3D;

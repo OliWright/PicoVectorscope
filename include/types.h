@@ -40,10 +40,10 @@ struct Vector3
 {
     typedef T  ScalarType;
     ScalarType x, y, z;
-    constexpr Vector3() {}
+    Vector3() {}
     constexpr Vector3(ScalarType x, ScalarType y, ScalarType z) : x(x), y(y), z(z) {}
     template<typename rhsScalarT>
-    constexpr Vector3(Vector3<rhsScalarT> rhs) : x(rhs.x), y(rhs.y), z(rhs.z) {}
+    explicit constexpr Vector3(const Vector3<rhsScalarT>& rhs) : x(rhs.x), y(rhs.y), z(rhs.z) {}
 
     constexpr Vector3 operator + (const Vector3& rhs) const
     {
