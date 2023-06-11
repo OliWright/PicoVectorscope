@@ -45,8 +45,9 @@ static uint16_t clipPoint(const StandardFixedTranslationVector& v)
 
 static void projectPoint(DisplayListVector2& outScreenSpacePoint, const StandardFixedTranslationVector& v)
 {
-    outScreenSpacePoint.x = (v.x / v.z) * 0.5f + 0.5f;
-    outScreenSpacePoint.y = (v.y / v.z) * 0.5f + 0.5f;
+    StandardFixedTranslationScalar halfRecipZ = Div<0>((StandardFixedTranslationScalar) 0.5f, v.z);
+    outScreenSpacePoint.x = v.x * halfRecipZ + 0.5f;
+    outScreenSpacePoint.y = v.y * halfRecipZ + 0.5f;
 }
 
 static bool clip(StandardFixedTranslationVector& a, StandardFixedTranslationVector& b,
@@ -154,11 +155,16 @@ void Shape3D::Draw(DisplayList& displayList,
 
     // Draw all the edges
     uint16_t previousPoint = 0xffff;
+    Intensity edgeIntensity = intensity;
     for (uint32_t i = 0; i < m_numEdges; ++i)
     {
         const uint16_t a = m_edges[i][0];
         const uint16_t b = m_edges[i][1];
-        drawClippedLine(displayList, intensity,
+        if(m_edgeIntensities != nullptr)
+        {
+            edgeIntensity = m_edgeIntensities[i] * intensity;
+        }
+        drawClippedLine(displayList, edgeIntensity,
                         viewSpacePoints[a], viewSpacePoints[b],
                         screenSpacePoints[a], screenSpacePoints[b],
                         clipFlags[a], clipFlags[b],

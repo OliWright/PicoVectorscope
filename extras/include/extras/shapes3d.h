@@ -25,7 +25,8 @@
 
 // Construction helper.  You can just pass in const arrays for points and edges
 // without having to worry about the counts.
-#define SHAPE_3D(points, edges) Shape3D(points, (uint) (sizeof(points) / sizeof(points[0])), edges, (uint) (sizeof(edges) / sizeof(edges[0])))
+#define SHAPE_3D(points, edges) Shape3D(points, (uint) (sizeof(points) / sizeof(points[0])), edges, nullptr, (uint) (sizeof(edges) / sizeof(edges[0])))
+#define SHAPE_3D_2(points, edges, edgeIntensities) Shape3D(points, (uint) (sizeof(points) / sizeof(points[0])), edges, edgeIntensities, (uint) (sizeof(edges) / sizeof(edges[0])))
 
 // 3D wireframe shape, consisting of points and edges
 class Shape3D
@@ -33,26 +34,41 @@ class Shape3D
 public:
     typedef uint16_t Edge[2];
 
+    Shape3D() {}
+
     // Often when you're constructing a Shape3D, you'll have fixed arrays of points
     // and edges.
     // It's recommended to use the SHAPE_3D helper, to make things a little less wordy.
     constexpr Shape3D(const StandardFixedTranslationVector* points, uint numPoints,
-            const Edge* edges, uint numEdges)
+            const Edge* edges, const Intensity* edgeIntensities, uint numEdges)
         : m_points(points)
         , m_numPoints(numPoints)
         , m_edges(edges)
+        , m_edgeIntensities(edgeIntensities)
         , m_numEdges(numEdges)
     {}
+
+    void Init(const StandardFixedTranslationVector* points, uint numPoints,
+            const Edge* edges, const Intensity* edgeIntensities, uint numEdges)
+    {
+        m_points = points;
+        m_numPoints = numPoints;
+        m_edges = edges;
+        m_edgeIntensities = edgeIntensities;
+        m_numEdges = numEdges;
+    }
+
 
     void Draw(DisplayList& displayList,
               const FixedTransform3D& modelToWorld,
               const Camera& camera,
-              Intensity intensity) const;
+              Intensity intensity = 1) const;
     
 private:
     const StandardFixedTranslationVector* m_points;
     uint                                  m_numPoints;
     const Edge*                           m_edges;
+    const Intensity*                      m_edgeIntensities;
     uint                                  m_numEdges;
 };
 
