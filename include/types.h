@@ -21,8 +21,6 @@
 #pragma once
 #include "pico/types.h"
 
-constexpr float kPi = 3.14159265358979323846f;
-
 template <typename T>
 struct Vector2
 {

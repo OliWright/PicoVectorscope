@@ -59,6 +59,9 @@ uint32_t SimpleRand();
 extern uint32_t g_randSeed;
 typedef unsigned int uint;
 
+constexpr float kPi = 3.14159265358979323846f;
+constexpr float k2Pi = kPi * 2.f;
+
 // This will shift right if shift is +ve, or shift left is shift is -ve
 template <typename T>
 static constexpr inline T SignedShift(T val, int shift)
@@ -343,6 +346,29 @@ public:
         return FixedPoint((StorageType)(SimpleRand() & ((1 << (kNumFractionalBits + 1)) - 1))) - FixedPoint(1.f);
     }
 
+    static FixedPoint ApproxATan2(FixedPoint y, FixedPoint x)
+    {
+        constexpr FixedPoint kCoeff1 = kPi * 0.25f;
+        constexpr FixedPoint kCoeff2 = kCoeff1 * 3;
+        FixedPoint::IntermediateType absY = Abs(y) + FixedPoint((FixedPoint::StorageType)1);     // kludge to prevent 0/0 condition
+        FixedPoint angle;
+        if (x >= 0)
+        {
+            FixedPoint r = (x - absY) / (x + absY);
+            angle = kCoeff1 - kCoeff1 * r;
+        }
+        else
+        {
+            FixedPoint r = (x + absY) / (absY - x);
+            angle = kCoeff2 - kCoeff1 * r;
+        }
+        if (y < 0)
+            return(-angle);     // negate if in quad III or IV
+        else
+            return(angle);
+    }
+
+
 private:
     // Specialisation to convert from a different fixed point format
     template <int rhsNumWhole, int rhsNumFrac, typename rhsTStorage, typename rhsTIntermediateStorage, bool rhsDoClamping>
@@ -463,3 +489,4 @@ constexpr static inline typename TA::IntermediateType Abs(TA a)
 
 // Unit tests
 void TestFixedPoint();
+
