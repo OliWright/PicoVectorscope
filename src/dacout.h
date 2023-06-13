@@ -104,9 +104,9 @@ public:
     // to enable the remaining pending buffers to be sent to the DACs
     static void Poll();
 
+    constexpr static uint32_t kNumEntriesPerBuffer = 4096;
 private:
     constexpr static uint32_t kNumBuffers = 3;
-    constexpr static uint32_t kNumEntriesPerBuffer = 4096;
 
     // We have one DmaChannel per buffer, but each one uses two actual
     // DMA channels in order to allow chaining.

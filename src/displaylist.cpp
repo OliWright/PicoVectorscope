@@ -91,7 +91,7 @@ DisplayList::DisplayList(uint32_t maxNumItems, uint32_t maxNumPoints)
 }
 
 // TODO: Make these configurable
-static DisplayListVector2 s_calibrationScale(0.9375f, 0.875f);
+static DisplayListVector2 s_calibrationScale(0.875f, 0.875f);
 static DisplayListVector2 s_calibrationBias(0.0625f, 0.0625f);
 
 void DisplayList::PushVector(DisplayListScalar x, DisplayListScalar y, Intensity intensity)
@@ -100,22 +100,28 @@ void DisplayList::PushVector(DisplayListScalar x, DisplayListScalar y, Intensity
     {
         return;
     }
-    const Vector& previous                 = m_pDisplayListVectors[m_numDisplayListVectors - 1];
     Vector&       vector                   = m_pDisplayListVectors[m_numDisplayListVectors++];
     vector.x                               = (x * s_calibrationScale.x) + s_calibrationBias.x;
     vector.y                               = (y * s_calibrationScale.y) + s_calibrationBias.y;
-    DisplayListScalar::IntermediateType dx = vector.x - previous.x;
-    DisplayListScalar::IntermediateType dy = vector.y - previous.y;
+    vector.numSteps = 1;
+    if(intensity > 0)
+    {
+        const Vector& previous                 = m_pDisplayListVectors[m_numDisplayListVectors - 2];
+        DisplayListScalar::IntermediateType dx = vector.x - previous.x;
+        DisplayListScalar::IntermediateType dy = vector.y - previous.y;
 
-    Intensity::IntermediateType length = ((dx * dx) + (dy * dy)).sqrt();
-    Intensity::IntermediateType time   = intensity * intensity * length;
+        Intensity::IntermediateType length = ((dx * dx) + (dy * dy)).sqrt();
+        Intensity::IntermediateType time   = intensity * intensity * length;
 
-    uint32_t numSteps = (time * SPEED_CONSTANT).getIntegerPart() + 1;
-    vector.numSteps   = (numSteps > 0xffff) ? 0xffff : (uint16_t)numSteps;
-#if STEP_DIV_IN_DISPLAY_LIST
-    vector.stepX = DisplayListIntermediate(dx) / (int) vector.numSteps;
-    vector.stepY = DisplayListIntermediate(dy) / (int) vector.numSteps;
-#endif
+        uint32_t numSteps = (time * SPEED_CONSTANT).getIntegerPart() + 1;
+        const uint32_t kMaxSteps = DacOutput::kNumEntriesPerBuffer - 32; //< Minus nominal value for pre and post steps.
+                                                                         //  TODO: Make more rigorous
+        vector.numSteps   = (numSteps > kMaxSteps) ? kMaxSteps : (uint16_t)numSteps;
+    #if STEP_DIV_IN_DISPLAY_LIST
+        vector.stepX = DisplayListIntermediate(dx) / (int) vector.numSteps;
+        vector.stepY = DisplayListIntermediate(dy) / (int) vector.numSteps;
+    #endif
+    }
 }
 
 void DisplayList::PushPoint(DisplayListScalar x, DisplayListScalar y, Intensity intensity)
@@ -141,6 +147,8 @@ void DisplayList::PushRasterDisplay(const RasterDisplay& rasterDisplay)
 
 void DisplayList::terminateVectors()
 {
+    // Move the beam to 0,0 after the final vector because there will be a small
+    // delay until the PIO program is switched
     assert(m_numDisplayListVectors < m_maxDisplayListVectors);
     Vector& vector  = m_pDisplayListVectors[m_numDisplayListVectors++];
     vector.x        = 0;
@@ -155,6 +163,8 @@ void DisplayList::terminateVectors()
 
 void DisplayList::terminatePoints()
 {
+    // Move the beam to 0,0 after the final point because there will be a small
+    // delay until the PIO program is switched
     assert(m_numDisplayListPoints < m_maxDisplayListPoints);
     Point& point     = m_pDisplayListPoints[m_numDisplayListPoints++];
     point.x          = 0;
@@ -190,6 +200,14 @@ static inline uint32_t scalarTo12bitClamped(DisplayListIntermediate v)
     int32_t bits = v.getStorage() >> (DisplayListIntermediate::kNumFractionalBits - 12);
     return (bits > 0xfff) ? 0xfff : ((bits < 0) ? 0 : bits);
 }
+
+static inline uint32_t calcDacOutputValue(DisplayListIntermediate x, DisplayListIntermediate y)
+{
+    uint32_t bitsX = scalarTo12bit(x);
+    uint32_t bitsY = scalarTo12bit(y);
+    return bitsX | (bitsY << 12); // The z value would take up the top 8 bits if we were using it | (255 << 24);
+}
+
 
 void DisplayList::OutputToDACs()
 {
@@ -379,40 +397,88 @@ void DisplayList::OutputToDACs()
         DisplayListIntermediate x(0), y(0);
 
         DacOutput::SetCurrentPioSm(DacOutputPioSm::Vector());
+        DisplayListIntermediate dx;
+        DisplayListIntermediate dy;
+        bool previousVectorWasJump = true;
         for (; pItem != pEnd; ++pItem)
         {
-            const Vector& vector   = *pItem;
-            uint32_t      numSteps = vector.numSteps;
-            if (numSteps > 8192)
-                numSteps = 8192;
+            const Vector& vector = *pItem;
+            const uint32_t numSteps = vector.numSteps;
 #if STEP_DIV_IN_DISPLAY_LIST
-            const DisplayListIntermediate dx = vector.stepX;
-            const DisplayListIntermediate dy = vector.stepY;
+            dx = vector.stepX;
+            dy = vector.stepY;
 #else
-            const DisplayListIntermediate dx = DisplayListIntermediate(vector.x - x) / (int)numSteps;
-            const DisplayListIntermediate dy = DisplayListIntermediate(vector.y - y) / (int)numSteps;
+            dx = DisplayListIntermediate(vector.x - x);
+            dy = DisplayListIntermediate(vector.y - y);
+            if(numSteps > 1)
+            {
+                dx /= (int) numSteps;
+                dy /= (int) numSteps;
+            }
 #endif
-            uint32_t numStepsRemaining = numSteps;
+            const bool thisVectorIsJump = (numSteps == 1);
+
+            // TODO: Figure out how many 'pre-hold' steps to do, where we
+            //       hold the beam at the start of the vector
+            uint32_t numPreHoldSteps = 0;
+            if(previousVectorWasJump && !thisVectorIsJump)
+            {
+                // Start of a new vector after a jump
+                // **** Disabled for now
+                //numPreHoldSteps = 1;
+            }
+            else
+            {
+                // This is a vector continuing from before
+            }
+
+            // TODO: Figure out how many 'overshoot' steps to do, where for
+            //       a dim fast-beam vector, we deliberatly overshoot
+            //       if the next vector is a jump
+            uint32_t numOvershootSteps = 0;
+             // If this vector is real, but the next vector is a jump...
+             // (Should be safe to only look at the next vector if this one is real)
+             // (But does assume short-circuit boolean evaluation)
+            if(!thisVectorIsJump && (pItem[1].numSteps == 1))
+            {
+                // Add a step of overshoot
+                // **** Disabled for now
+                //numOvershootSteps = 1;
+            }
+
+            uint32_t numStepsRemaining = numSteps + numPreHoldSteps + numOvershootSteps;
             while (numStepsRemaining)
             {
                 uint32_t  numStepsInBatch;
                 uint32_t* pOutput
                     = DacOutput::AllocateBufferSpace(numStepsRemaining, numStepsInBatch);
-                const uint32_t* pOutputEnd = pOutput + numStepsInBatch;
+                uint32_t* pOutputEnd;
+                if(numPreHoldSteps > 0)
+                {
+                    assert(numStepsInBatch > numPreHoldSteps);
+                    pOutputEnd = pOutput + numPreHoldSteps;
+                    const uint32_t bits = calcDacOutputValue(x, y);
+                    for (; pOutput != pOutputEnd; ++pOutput)
+                    {
+                        *pOutput = bits;
+                    }
+                    numStepsInBatch -= numPreHoldSteps;
+                    numPreHoldSteps = 0;
+                }
+                pOutputEnd = pOutput + numStepsInBatch;
                 for (; pOutput != pOutputEnd; ++pOutput)
                 {
                     // Calculate the coordinate for this step of the vector
                     x += dx;
                     y += dy;
-                    uint32_t bitsX = scalarTo12bit(x);
-                    uint32_t bitsY = scalarTo12bit(y);
-                    *pOutput       = bitsX | (bitsY << 12) | (255 << 24);
+                    *pOutput = calcDacOutputValue(x, y);
                 }
                 numStepsRemaining -= numStepsInBatch;
             }
             // Snap to the true end of the vector
             x = vector.x;
             y = vector.y;
+            previousVectorWasJump = thisVectorIsJump;
         }
         // LOG_INFO("Out Vectors End\n");
     }

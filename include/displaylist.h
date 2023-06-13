@@ -96,8 +96,8 @@ public:
     void OutputToDACs();
     void Clear()
     {
-        m_numDisplayListVectors = 1;
-        m_numDisplayListPoints  = 1;
+        m_numDisplayListVectors = 0;
+        m_numDisplayListPoints  = 0;
         m_numRasterDisplays = 0;
     }
 
