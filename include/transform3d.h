@@ -150,14 +150,16 @@ struct Transform3D
         return *this;
     }
 
-    void transformVector(TranslationVector3Type& result, const TranslationVector3Type& v) const
+    template<typename T>
+    void transformVector(Vector3<T>& result, const Vector3<T>& v) const
     {
         result.x = (v.x * m[0][0]) + (v.y * m[1][0]) + (v.z * m[2][0]) + t.x;
         result.y = (v.x * m[0][1]) + (v.y * m[1][1]) + (v.z * m[2][1]) + t.y;
         result.z = (v.x * m[0][2]) + (v.y * m[1][2]) + (v.z * m[2][2]) + t.z;
     }
 
-    void rotateVector(OrientationVector3Type& result, const OrientationVector3Type& v) const
+    template<typename T>
+    void rotateVector(Vector3<T>& result, const Vector3<T>& v) const
     {
         result.x = (v.x * m[0][0]) + (v.y * m[1][0]) + (v.z * m[2][0]);
         result.y = (v.x * m[0][1]) + (v.y * m[1][1]) + (v.z * m[2][1]);
