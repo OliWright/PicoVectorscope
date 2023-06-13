@@ -121,8 +121,8 @@ static void drawClippedLine(DisplayList& displayList, Intensity intensity,
         if(clip(a, b, da, db, clipFlagsA, clipFlagsB, planesTested, kClipFlagBottom)) return;
     }
 
-    //assert((clipFlagsA == 0) && (clipFlagsB == 0));
-    //assert((a.z > 0.f) && (b.z > 0.f));
+    assert((clipFlagsA == 0) && (clipFlagsB == 0));
+    assert((a.z > 0.f) && (b.z > 0.f));
 
     // Both points should now be on the screen
     DisplayListVector2 screenPos;
