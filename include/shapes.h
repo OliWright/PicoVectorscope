@@ -22,7 +22,7 @@
 #include "displaylist.h"
 #include "transform2d.h"
 
-typedef FixedTransform2D::Vector2Type              ShapeVector2;
+typedef FixedTransform2D::TranslationVectorType    ShapeVector2;
 typedef FixedPoint<12, 8, int32_t, int32_t, false> BurnLength;
 
 // Draw a shape, as defined by an array of 2D points.

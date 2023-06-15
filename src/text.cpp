@@ -414,7 +414,7 @@ void CalcTextTransform(const DisplayListVector2& pos,
                        FixedTransform2D&         outTranform)
 {
     outTranform.setAsScale(scale);
-    outTranform.setTranslation(FixedTransform2D::Vector2Type(pos.x, pos.y));
+    outTranform.setTranslation(FixedTransform2D::TranslationVectorType(pos.x, pos.y));
 }
 
 uint32_t FragmentText(const char*             message,

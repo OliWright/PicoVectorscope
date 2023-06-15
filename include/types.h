@@ -26,8 +26,59 @@ struct Vector2
 {
     typedef T  ScalarType;
     ScalarType x, y;
-    constexpr Vector2() {}
+    Vector2() {}
     constexpr Vector2(ScalarType x, ScalarType y) : x(x), y(y) {}
+    template<typename rhsScalarT>
+    explicit constexpr Vector2(const Vector2<rhsScalarT>& rhs) : x(rhs.x), y(rhs.y) {}
+
+
+    constexpr Vector2 operator + (const Vector2& rhs) const
+    {
+        return Vector2(x + rhs.x, y + rhs.y);
+    }
+
+    constexpr Vector2 operator - (const Vector2& rhs) const
+    {
+        return Vector2(x - rhs.x, y - rhs.y);
+    }
+
+    template<typename rhsScalarT>
+    constexpr Vector2 operator * (rhsScalarT rhs) const
+    {
+        return Vector2(x * rhs, y * rhs);
+    }
+
+    constexpr Vector2& operator += (const Vector2& rhs)
+    {
+        *this = *this + rhs;
+        return *this;
+    }
+
+    constexpr Vector2& operator -= (const Vector2& rhs)
+    {
+        *this = *this - rhs;
+        return *this;
+    }
+
+    template<typename rhsScalarT>
+    constexpr Vector2& operator *= (rhsScalarT rhs)
+    {
+        *this = *this * rhs;
+        return *this;
+    }
+
+    template<typename rhsScalarT>
+    constexpr void operator = (const Vector2<T>& rhs)
+    {
+        x = rhs.x;
+        y = rhs.y;
+    }
+
+    constexpr Vector2 operator - ()
+    {
+        return Vector2(-x, -y);
+    }
+
 
     constexpr const ScalarType& operator[](int idx) const { return (&x)[idx]; }
     constexpr ScalarType& operator[](int idx) { return (&x)[idx]; }
@@ -84,6 +135,11 @@ struct Vector3
         x = rhs.x;
         y = rhs.y;
         z = rhs.z;
+    }
+
+    constexpr Vector3 operator - ()
+    {
+        return Vector3(-x, -y, -z);
     }
 
     constexpr const ScalarType& operator[](int idx) const { return (&x)[idx]; }

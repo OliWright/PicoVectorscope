@@ -28,10 +28,10 @@ struct Transform3D
 {
     typedef OrientationT OrientationType;
     typedef TranslationT TranslationType;
-    typedef Vector3<OrientationType> OrientationVector3Type;
-    typedef Vector3<TranslationType> TranslationVector3Type;
-    OrientationVector3Type m[3];
-    TranslationVector3Type t;
+    typedef Vector3<OrientationType> OrientationVectorType;
+    typedef Vector3<TranslationType> TranslationVectorType;
+    OrientationVectorType m[3];
+    TranslationVectorType t;
 
     // Default constructor will leave all members uninitialised
     // (cannot be used constexpr)
@@ -42,26 +42,30 @@ struct Transform3D
     //
 
     // Identity orientation, with a specified translation
-    explicit constexpr Transform3D(const TranslationVector3Type& translation)
+    explicit constexpr Transform3D(const TranslationVectorType& translation)
     : m{{1,0,0}, {0,1,0}, {0,0,1}}
     , t(translation)
+    , m_orientationIsIdentity(true)
     {}
     // Scale, with a zero translation
-    explicit constexpr Transform3D(const OrientationVector3Type& scale)
+    explicit constexpr Transform3D(const OrientationVectorType& scale)
     : m{{scale.x,0,0}, {0,scale.y,0}, {0,0,scale.z}}
     , t(0,0,0)
+    , m_orientationIsIdentity((scale.x == 1) && (scale.y == 1) && (scale.z == 1))
     {}
     // Scale and translation
-    explicit constexpr Transform3D(const TranslationVector3Type& translation, const OrientationVector3Type& scale)
+    explicit constexpr Transform3D(const TranslationVectorType& translation, const OrientationVectorType& scale)
     : m{{scale.x,0,0}, {0,scale.y,0}, {0,0,scale.z}}
     , t(translation)
+    , m_orientationIsIdentity((scale.x == 1) && (scale.y == 1) && (scale.z == 1))
     {}
 
     constexpr void setOrientationAsIdentity()
     {
-        m[0] = OrientationVector3Type(1,0,0);
-        m[1] = OrientationVector3Type(0,1,0);
-        m[2] = OrientationVector3Type(0,0,1);
+        m[0] = OrientationVectorType(1,0,0);
+        m[1] = OrientationVectorType(0,1,0);
+        m[2] = OrientationVectorType(0,0,1);
+        m_orientationIsIdentity = true;
     }
 
     constexpr void setAsIdentity()
@@ -84,17 +88,18 @@ struct Transform3D
         SinTable::SinCos(z, s, c);
         sz = (OrientationType) s; cz = (OrientationType) c;
 
-        m[0] = OrientationVector3Type( cz * cy,  sz * cx +  cz * -sy * -sx,  sz * sx +  cz * -sy * cx);
-        m[1] = OrientationVector3Type(-sz * cy,  cz * cx + -sz * -sy * -sx,  cz * sx + -sz * -sy * cx);
-        m[2] = OrientationVector3Type( sy,       cy * -sx,                   cy * cx                 );
+        m[0] = OrientationVectorType( cz * cy,  sz * cx +  cz * -sy * -sx,  sz * sx +  cz * -sy * cx);
+        m[1] = OrientationVectorType(-sz * cy,  cz * cx + -sz * -sy * -sx,  cz * sx + -sz * -sy * cx);
+        m[2] = OrientationVectorType( sy,       cy * -sx,                   cy * cx                 );
+        m_orientationIsIdentity = false;
     }
 
-    void setTranslation(const TranslationVector3Type& translation)
+    void setTranslation(const TranslationVectorType& translation)
     {
         t = translation;
     }
 
-    void translate(const TranslationVector3Type& translation)
+    void translate(const TranslationVectorType& translation)
     {
         t.x += translation.x;
         t.y += translation.y;
@@ -106,11 +111,12 @@ struct Transform3D
         m[0] *= scale;
         m[1] *= scale;
         m[2] *= scale;
+        m_orientationIsIdentity = false;
 
         return *this;
     }
 
-    constexpr Transform3D& operator*=(const OrientationVector3Type& scale)
+    constexpr Transform3D& operator*=(const OrientationVectorType& scale)
     {
         m[0] *= scale.x;
         m[1] *= scale.y;
@@ -118,16 +124,24 @@ struct Transform3D
         t.x *= scale.x;
         t.y *= scale.y;
         t.z *= scale.z;
+        m_orientationIsIdentity = false;
 
         return *this;
     }
 
-    TranslationVector3Type operator * (const TranslationVector3Type& v) const
+    TranslationVectorType operator * (const TranslationVectorType& v) const
     {
-        TranslationVector3Type result;
-        result.x = (v.x * m[0][0]) + (v.y * m[1][0]) + (v.z * m[2][0]) + t.x;
-        result.y = (v.x * m[0][1]) + (v.y * m[1][1]) + (v.z * m[2][1]) + t.y;
-        result.z = (v.x * m[0][2]) + (v.y * m[1][2]) + (v.z * m[2][2]) + t.z;
+        TranslationVectorType result;
+        if(m_orientationIsIdentity)
+        {
+            result = v + t;
+        }
+        else
+        {
+            result.x = (v.x * m[0][0]) + (v.y * m[1][0]) + (v.z * m[2][0]) + t.x;
+            result.y = (v.x * m[0][1]) + (v.y * m[1][1]) + (v.z * m[2][1]) + t.y;
+            result.z = (v.x * m[0][2]) + (v.y * m[1][2]) + (v.z * m[2][2]) + t.z;
+        }
         return result;
     }
 
@@ -137,9 +151,19 @@ struct Transform3D
         // matrix concatentation
         // E.g. modelToView = modelToWorld * worldToView
         Transform3D result;
-        rhs.rotateVector(result.m[0], m[0]);
-        rhs.rotateVector(result.m[1], m[1]);
-        rhs.rotateVector(result.m[2], m[2]);
+        if(m_orientationIsIdentity)
+        {
+            // Optimise a common case
+            result.m[0] = rhs.m[0];
+            result.m[1] = rhs.m[1];
+            result.m[2] = rhs.m[2];
+        }
+        else
+        {
+            rhs.rotateVector(result.m[0], m[0]);
+            rhs.rotateVector(result.m[1], m[1]);
+            rhs.rotateVector(result.m[2], m[2]);
+        }
         rhs.transformVector(result.t, t);
         return result;
     }
@@ -180,11 +204,16 @@ struct Transform3D
         outTransform.m[2][2] = m[2][2];
 
         // Calculate the inverted translation
-        const TranslationVector3Type negTrans(-t.x, -t.y, -t.z);
+        const TranslationVectorType negTrans(-t.x, -t.y, -t.z);
         outTransform.t.x = (negTrans.x * outTransform.m[0][0]) + (negTrans.y * outTransform.m[1][0]) + (negTrans.z * outTransform.m[2][0]);
         outTransform.t.y = (negTrans.x * outTransform.m[0][1]) + (negTrans.y * outTransform.m[1][1]) + (negTrans.z * outTransform.m[2][1]);
         outTransform.t.z = (negTrans.x * outTransform.m[0][2]) + (negTrans.y * outTransform.m[1][2]) + (negTrans.z * outTransform.m[2][2]);
     }
+
+    void markAsManuallyManipulated() {m_orientationIsIdentity = false;}
+    
+private:
+    bool m_orientationIsIdentity;
 };
 
 // Not recommended for the Pico due to lack of floating point hardware
