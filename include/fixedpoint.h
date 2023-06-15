@@ -309,6 +309,12 @@ public:
     }
 
     template <typename T>
+    constexpr bool operator==(const T& rhs) const
+    {
+        return m_storage == FixedPoint(rhs).getStorage();
+    }
+
+    template <typename T>
     constexpr bool operator!=(const T& rhs) const
     {
         return m_storage != FixedPoint(rhs).getStorage();
