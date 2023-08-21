@@ -74,7 +74,7 @@ struct Vector2
         y = rhs.y;
     }
 
-    constexpr Vector2 operator - ()
+    constexpr Vector2 operator - () const
     {
         return Vector2(-x, -y);
     }
@@ -105,6 +105,12 @@ struct Vector3
     }
 
     template<typename rhsScalarT>
+    constexpr Vector3 operator * (Vector3<rhsScalarT> rhs) const
+    {
+        return Vector3(x * rhs.x, y * rhs.y, z * rhs.z);
+    }
+
+    template<typename rhsScalarT>
     constexpr Vector3 operator * (rhsScalarT rhs) const
     {
         return Vector3(x * rhs, y * rhs, z * rhs);
@@ -123,6 +129,13 @@ struct Vector3
     }
 
     template<typename rhsScalarT>
+    constexpr Vector3& operator *= (Vector3<rhsScalarT> rhs)
+    {
+        *this = *this * rhs;
+        return *this;
+    }
+
+    template<typename rhsScalarT>
     constexpr Vector3& operator *= (rhsScalarT rhs)
     {
         *this = *this * rhs;
@@ -137,7 +150,7 @@ struct Vector3
         z = rhs.z;
     }
 
-    constexpr Vector3 operator - ()
+    constexpr Vector3 operator - () const
     {
         return Vector3(-x, -y, -z);
     }
