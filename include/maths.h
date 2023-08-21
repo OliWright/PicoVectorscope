@@ -22,13 +22,13 @@
 #include "types.h"
 
 template <typename T>
-T::ScalarType dot(const T& a, const T& b)
+typename Vector3<T>::ScalarType dot(const Vector3<T>& a, const Vector3<T>& b)
 {
     return (a.x * a.x) + (a.y * a.y) + (a.z * a.z);
 }
 
 template <typename T>
-T cross(const T& a, const T& b)
+Vector3<T> cross(const Vector3<T>& a, const Vector3<T>& b)
 {
-    return T(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+    return Vector3<T>(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
