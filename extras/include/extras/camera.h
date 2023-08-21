@@ -57,6 +57,8 @@ public:
 
     const StandardFixedTranslationVector& GetPosition() const { return m_cameraToWorld.t; }
 
+    const FixedTransform3D& GetCameraToWorld() const { return m_cameraToWorld; }
+
     // The worldToClip transform is used to transform points from world space to
     // clip space.
     // Clip space is arranged so that the clip planes are at a nice 45 degrees
