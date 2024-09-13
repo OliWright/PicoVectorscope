@@ -75,7 +75,7 @@ TileMap::TileMap(Mode                      mode,
     m_rasterDisplay.width = (uint32_t) m_visibleWidthPixels;
     m_rasterDisplay.height = (uint32_t) m_visibleHeightPixels;
     m_rasterDisplay.scanlineCallback = tileMapScanlineCallback;
-    m_rasterDisplay.bottomRight = bottomRight;
+    m_rasterDisplay.topLeft = topLeft;
     m_rasterDisplay.bottomRight = bottomRight;
 
     switch(m_rasterDisplay.mode)
