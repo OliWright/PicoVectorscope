@@ -90,6 +90,9 @@ void test(T fixedPointResult, float expected)
 void TestFixedPoint()
 {
 #if LOG_ENABLED
+    //
+    // Basic arithmetic tests
+    //
     FixedPoint_S1_14 a;
     a = 0.25f;
     test(a, 0.25f);
@@ -114,10 +117,9 @@ void TestFixedPoint()
     a = a * 2;
     test(a, 0.3f);
 
-    // a = 0.15f;
-    // a = a * (uint16_t)2;
-    // LOG_INFO(FixedPointTesting, "a = %f (0.3)\n", (float)a);
-
+    //
+    // Sqrt tests
+    //
     a = FixedPoint_S1_14(1.f).sqrt();
     test(a, 1.f);
 
@@ -127,20 +129,18 @@ void TestFixedPoint()
     a = FixedPoint_S1_14(0.5f).sqrt();
     test(a, 0.7071f);
 
-    int32_t sq = 0x10000;
-    sq = FixedPointSqrt(sq, 16);
-    LOG_INFO(FixedPointTesting, "a = 0x%08x (0x00010000)\n", sq);
-
-    sq = 0x4000;
-    sq = FixedPointSqrt(sq, 14);
-    LOG_INFO(FixedPointTesting, "a = 0x%08x (0x00004000)\n", sq);
-
+    //
+    // Format conversion tests
+    //
     FixedPoint_S5_26 b = FixedPoint_S5_26(FixedPoint_S1_14(0.3f) - FixedPoint_S1_14(0.1f));
     test(b, 0.2f);
 
     b = FixedPoint_S5_26(FixedPoint_S1_14(1.f) / FixedPoint_S13_18(0.125f));
     test(b, 8.f);
 
+    //
+    // Division tests
+    //
     b = Div<1>(FixedPoint_S5_26(1.f), FixedPoint_S5_26(8.f));
     test(b, 0.125f);
 
@@ -150,6 +150,9 @@ void TestFixedPoint()
     FixedPoint_S13_18 d = Div<1>(FixedPoint_S13_18(1.f), FixedPoint_S13_18(8.f));
     test(d, 0.125f);
 
+    //
+    // Sin table tests
+    //
     test(SinTable::LookUp(0.5f), 0.479f);
     test(SinTable::LookUp(0.f), 0.);
     test(SinTable::LookUp(kPi * 2.f), 0.);
