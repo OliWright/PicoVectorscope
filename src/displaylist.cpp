@@ -208,16 +208,8 @@ static inline uint32_t calcDacOutputValue(DisplayListIntermediate x, DisplayList
     return bitsX | (bitsY << 12); // The z value would take up the top 8 bits if we were using it | (255 << 24);
 }
 
-
-void DisplayList::OutputToDACs()
+void DisplayList::outputPoints()
 {
-    LOG_INFO(DisplayListSynchronisation, "DL: %d, %d\n", m_numDisplayListVectors,
-             m_numDisplayListPoints);
-
-    // We do the points first, because they're time-consuming to output to the DACs, but
-    // very lightweight from the CPU-side, filling in the output buffers.
-    // So if there are any points to draw, then it gives us a head start in filling
-    // the buffers.
     if (m_numDisplayListPoints > 0)
     {
         // LOG_INFO("Out Points Start\n");
@@ -277,118 +269,10 @@ void DisplayList::OutputToDACs()
         }
         // LOG_INFO("Out Points End\n");
     }
+}
 
-    for (uint32_t i = 0; i < m_numRasterDisplays; ++i)
-    {
-        DacOutput::SetCurrentPioSm(DacOutputPioSm::Raster());
-
-        const RasterDisplay& rasterDisplay = m_rasterDisplays[i];
-        DisplayListVector2   topLeft;
-        topLeft.x = (rasterDisplay.topLeft.x * s_calibrationScale.x) + s_calibrationBias.x;
-        topLeft.y = (rasterDisplay.topLeft.y * s_calibrationScale.y) + s_calibrationBias.y;
-        DisplayListVector2 bottomRight;
-        bottomRight.x = (rasterDisplay.bottomRight.x * s_calibrationScale.x) + s_calibrationBias.x;
-        bottomRight.y = (rasterDisplay.bottomRight.y * s_calibrationScale.y) + s_calibrationBias.y;
-        DisplayListIntermediate dx = (bottomRight.x - topLeft.x) / (int)rasterDisplay.width;
-        DisplayListIntermediate dy = (bottomRight.y - topLeft.y) / (int)rasterDisplay.height;
-        DisplayListIntermediate y  = topLeft.y;
-        const uint32_t num32BitEntriesToAllocatePerScanline = ((rasterDisplay.width + 1) >> 1) + 1;
-        // LOG_INFO(RasterInfo, "dx: %f, dy: %f, x12: %d\n", (float) dx, (float) dy,
-        // scalarTo12bit(bottomRight.x));
-        for (uint32_t scanlineIdx = 0; scanlineIdx < rasterDisplay.height; ++scanlineIdx)
-        {
-            uint16_t* pOutputStart
-                = (uint16_t*)DacOutput::AllocateBufferSpace(num32BitEntriesToAllocatePerScanline);
-            uint16_t* pOutput = pOutputStart;
-            // uint16_t* pEnd = pOutput + (numEntriesToAllocatePerScanline * 2);
-            DisplayListIntermediate x = topLeft.x;
-            *(pOutput++)              = 0;
-            *(pOutput++)              = scalarTo12bit(y);
-
-            switch (rasterDisplay.mode)
-            {
-            case RasterDisplay::Mode::e1Bit:
-            {
-                const uint8_t* pixel
-                    = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
-                const uint8_t* end      = pixel + ((rasterDisplay.width + 7 + rasterDisplay.horizontalScrollOffset) >> 3);
-                const uint16_t holdBits = 15 << 12;
-                uint bitStart = rasterDisplay.horizontalScrollOffset;
-                uint bytesWithoutOutput = 0;
-                for (; pixel != end; ++pixel)
-                {
-                    uint8_t pixelBlock = *pixel;
-                    ++bytesWithoutOutput;
-                    for (uint bitIdx = bitStart; bitIdx < 8; ++bitIdx)
-                    {
-                        x += dx;
-                        if ((pixelBlock & (0x80 >> bitIdx)) != 0)
-                        {
-                            *(pOutput++) = scalarTo12bitNoWrap(x) | holdBits;
-                            bytesWithoutOutput = 0;
-                        }
-                    }
-                    bitStart = 0;
-
-                    if(bytesWithoutOutput == 2)
-                    {
-                        bytesWithoutOutput = 0;
-                        *(pOutput++) = scalarTo12bitNoWrap(x);
-                    }
-                }
-                break;
-            }
-
-            case RasterDisplay::Mode::e4BitLinear:
-            {
-                const uint8_t* pixel
-                    = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
-                const uint8_t* end = pixel + rasterDisplay.width;
-                for (; pixel != end; ++pixel)
-                {
-                    x += dx;
-                    uint32_t hold = *pixel; // s_pixelToHold[*pixel];
-                    if (hold != 0)
-                    {
-                        *(pOutput++) = scalarTo12bitNoWrap(x) | ((hold - 1) << 12);
-                    }
-                }
-                break;
-            }
-
-            case RasterDisplay::Mode::e8BitGamma:
-            {
-                const uint8_t* pixel
-                    = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
-                const uint8_t* end = pixel + rasterDisplay.width;
-                for (; pixel != end; ++pixel)
-                {
-                    x += dx;
-                    uint32_t hold = s_pixelToHold[*pixel];
-                    if (hold != 0)
-                    {
-                        *(pOutput++) = scalarTo12bitNoWrap(x) | ((hold - 1) << 12);
-                    }
-                }
-                break;
-            }
-            }
-
-            uint32_t num16BitEntriesUsed = pOutput - pOutputStart;
-            if (num16BitEntriesUsed & 1)
-            {
-                // We used an odd number.  Add an inert output to make it even.
-                *(pOutput++) = 1;
-                ++num16BitEntriesUsed;
-            }
-            DacOutput::GiveBackUnusedEntries(num32BitEntriesToAllocatePerScanline
-                                             - (num16BitEntriesUsed >> 1));
-
-            y += dy;
-        }
-    }
-
-
+void DisplayList::outputVectors()
+{
     if (m_numDisplayListVectors > 1)
     {
         terminateVectors();
@@ -433,7 +317,7 @@ void DisplayList::OutputToDACs()
             }
 
             // TODO: Figure out how many 'overshoot' steps to do, where for
-            //       a dim fast-beam vector, we deliberatly overshoot
+            //       a dim fast-beam vector, we deliberately overshoot
             //       if the next vector is a jump
             uint32_t numOvershootSteps = 0;
              // If this vector is real, but the next vector is a jump...
@@ -482,6 +366,157 @@ void DisplayList::OutputToDACs()
         }
         // LOG_INFO("Out Vectors End\n");
     }
+}
+
+void DisplayList::outputRasters()
+{
+    for (uint32_t i = 0; i < m_numRasterDisplays; ++i)
+    {
+        DacOutput::SetCurrentPioSm(DacOutputPioSm::Raster());
+
+        const RasterDisplay& rasterDisplay = m_rasterDisplays[i];
+        DisplayListVector2   topLeft;
+        topLeft.x = (rasterDisplay.topLeft.x * s_calibrationScale.x) + s_calibrationBias.x;
+        topLeft.y = (rasterDisplay.topLeft.y * s_calibrationScale.y) + s_calibrationBias.y;
+        DisplayListVector2 bottomRight;
+        bottomRight.x = (rasterDisplay.bottomRight.x * s_calibrationScale.x) + s_calibrationBias.x;
+        bottomRight.y = (rasterDisplay.bottomRight.y * s_calibrationScale.y) + s_calibrationBias.y;
+        DisplayListIntermediate dx = (bottomRight.x - topLeft.x) / (int)rasterDisplay.width;
+        DisplayListIntermediate dy = (bottomRight.y - topLeft.y) / (int)rasterDisplay.height;
+        DisplayListIntermediate y  = topLeft.y;
+        const uint32_t num32BitEntriesToAllocatePerScanline = ((rasterDisplay.width + 1) >> 1) + 3;
+        // LOG_INFO(RasterInfo, "dx: %f, dy: %f, x12: %d\n", (float) dx, (float) dy,
+        // scalarTo12bit(bottomRight.x));
+        DisplayListIntermediate x;
+        for (uint32_t scanlineIdx = 0; scanlineIdx < rasterDisplay.height; ++scanlineIdx)
+        {
+            uint16_t* pOutputStart
+                = (uint16_t*)DacOutput::AllocateBufferSpace(num32BitEntriesToAllocatePerScanline);
+            uint16_t* pOutput = pOutputStart;
+            // uint16_t* pEnd = pOutput + (numEntriesToAllocatePerScanline * 2);
+            x = topLeft.x;
+            *(pOutput++)              = 0; // Indicates the next value will be for the Y DAC
+            *(pOutput++)              = scalarTo12bit(y);
+            *(pOutput++)              = scalarTo12bit(x) | (8 << 12); // Put the X DAC at the start of the scanline
+
+            switch (rasterDisplay.mode)
+            {
+            case RasterDisplay::Mode::e1Bit:
+            {
+                const uint8_t* pixel
+                    = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
+                const uint8_t* end      = pixel + ((rasterDisplay.width + 7 + rasterDisplay.horizontalScrollOffset) >> 3);
+                //const uint16_t holdBits = 8 << 12;
+                uint bitStart = rasterDisplay.horizontalScrollOffset;
+                uint bytesWithoutOutput = 0;
+                uint bitsWithoutOutput = 16;
+                for (; pixel != end; ++pixel)
+                {
+                    uint8_t pixelBlock = *pixel;
+                    ++bytesWithoutOutput;
+                    for (uint bitIdx = bitStart; bitIdx < 8; ++bitIdx)
+                    {
+                        x += dx;
+                        if ((pixelBlock & (0x80 >> bitIdx)) != 0)
+                        {
+                            uint hold = 4 + (bitsWithoutOutput >> 1);
+                            hold = (hold > 15) ? 15 : hold;
+                            hold = 15;
+                            //*(pOutput++) = scalarTo12bitNoWrap(x) | holdBits;
+                            *(pOutput++) = scalarTo12bitNoWrap(x) | (hold << 12);
+                            bytesWithoutOutput = 0;
+                            bitsWithoutOutput = 0;
+                        }
+                        else
+                        {
+                            ++bitsWithoutOutput;
+                        }
+                    }
+                    bitStart = 0;
+
+#if 0
+                    if(bytesWithoutOutput == 2)
+                    {
+                        // Update the x DAC to keep it moving, but with minumum hold to be as
+                        // dim as possible
+                        bytesWithoutOutput = 0;
+                        *(pOutput++) = scalarTo12bitNoWrap(x);
+                    }
+#endif
+                }
+                break;
+            }
+
+            case RasterDisplay::Mode::e4BitLinear:
+            {
+                const uint8_t* pixel
+                    = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
+                const uint8_t* end = pixel + rasterDisplay.width;
+                for (; pixel != end; ++pixel)
+                {
+                    x += dx;
+                    uint32_t hold = *pixel; // s_pixelToHold[*pixel];
+                    if (hold != 0)
+                    {
+                        *(pOutput++) = scalarTo12bitNoWrap(x) | ((hold - 1) << 12);
+                    }
+                }
+                break;
+            }
+
+            case RasterDisplay::Mode::e8BitGamma:
+            {
+                const uint8_t* pixel
+                    = rasterDisplay.scanlineCallback(scanlineIdx, rasterDisplay.userData);
+                const uint8_t* end = pixel + rasterDisplay.width;
+                for (; pixel != end; ++pixel)
+                {
+                    x += dx;
+                    uint32_t hold = s_pixelToHold[*pixel];
+                    if (hold != 0)
+                    {
+                        *(pOutput++) = scalarTo12bitNoWrap(x) | ((hold - 1) << 12);
+                    }
+                }
+                break;
+            }
+            }
+
+            if(scanlineIdx == (rasterDisplay.height - 1))
+            {
+                // That was the final scanline
+                // Move off the screen
+                x = 1;
+                *(pOutput++) = scalarTo12bitClamped(x);
+            }
+
+            uint32_t num16BitEntriesUsed = pOutput - pOutputStart;
+            if (num16BitEntriesUsed & 1)
+            {
+                // We used an odd number.  Add an inert output to make it even.
+                *(pOutput++) = scalarTo12bitClamped(x);
+                ++num16BitEntriesUsed;
+            }
+            DacOutput::GiveBackUnusedEntries(num32BitEntriesToAllocatePerScanline
+                                             - (num16BitEntriesUsed >> 1));
+
+            y += dy;
+        }
+    }
+}
+
+void DisplayList::OutputToDACs()
+{
+    LOG_INFO(DisplayListSynchronisation, "DL: %d, %d\n", m_numDisplayListVectors,
+             m_numDisplayListPoints);
+
+    // We do the points first, because they're time-consuming to output to the DACs, but
+    // very lightweight from the CPU-side, filling in the output buffers.
+    // So if there are any points to draw, then it gives us a head start in filling
+    // the buffers.
+    outputPoints();
+    outputRasters();
+    outputVectors();
 
     DacOutput::Flush(true);
 }
