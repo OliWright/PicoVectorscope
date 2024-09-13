@@ -94,9 +94,32 @@ struct Transform3D
         m_orientationIsIdentity = false;
     }
 
+    void setRotationZYX(SinTable::Index x, SinTable::Index y, SinTable::Index z)
+    {
+        SinTableValue s, c;
+        OrientationType sx, cx, sy, cy, sz, cz;
+
+        SinTable::SinCos(x, s, c);
+        sx = (OrientationType) s; cx = (OrientationType) c;
+        SinTable::SinCos(y, s, c);
+        sy = (OrientationType) s; cy = (OrientationType) c;
+        SinTable::SinCos(z, s, c);
+        sz = (OrientationType) s; cz = (OrientationType) c;
+
+        m[0] = OrientationVectorType( cy * cz,                  cy * sz,                -sy);
+        m[1] = OrientationVectorType( sx * sy * cz +  cx * -sz, sx * sy * sz +  cx * cz, sx * cy);
+        m[2] = OrientationVectorType( cx * sy * cz + -sx * -sz, cx * sy * sz + -sx * cz, cx * cy);
+        m_orientationIsIdentity = false;
+    }
+
     void setTranslation(const TranslationVectorType& translation)
     {
         t = translation;
+    }
+
+    void setZeroTranslation()
+    {
+        t[0] = t[1] = t[2] = 0;
     }
 
     void translate(const TranslationVectorType& translation)
