@@ -107,6 +107,10 @@ private:
     void terminateVectors();
     void terminatePoints();
 
+    void outputPoints();
+    void outputVectors();
+    void outputRasters();
+
     struct Vector
     {
         DisplayListScalar x, y;

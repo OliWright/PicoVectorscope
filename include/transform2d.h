@@ -21,57 +21,48 @@
 #pragma once
 #include "types.h"
 #include "fixedpoint.h"
-//#include <math.h>
-//#include "pico/float.h"
 
-template <typename T = float>
+template <typename OrientationT = float, typename TranslationT = float>
 struct Transform2D
 {
-    typedef T ScalarType;
-    typedef Vector2<ScalarType> Vector2Type;
-    ScalarType m[3][2];
+    typedef OrientationT OrientationType;
+    typedef TranslationT TranslationType;
+    typedef Vector2<OrientationType> OrientationVectorType;
+    typedef Vector2<TranslationType> TranslationVectorType;
+    OrientationVectorType m[2];
+    TranslationVectorType t;
 
     void setAsIdentity()
     {
-        m[0][0] = 1.f;
-        m[0][1] = 0.f;
-        m[1][0] = 0.f;
-        m[1][1] = 1.f;
-        m[2][0] = 0.f;
-        m[2][1] = 0.f;
+        m[0] = OrientationVectorType(1, 0);
+        m[1] = OrientationVectorType(0, 1);
+        t = TranslationVectorType(0, 0);
     }
 
-    void setAsRotation(ScalarType s, ScalarType c, const Vector2Type& origin = Vector2Type(0.f, 0.f))
+    void setAsRotation(OrientationType s, OrientationType c, const TranslationVectorType& origin = TranslationVectorType(0, 0))
     {
-        m[0][0] = c;
-        m[0][1] = s;
-        m[1][0] = -s;
-        m[1][1] = c;
+        m[0] = OrientationVectorType(c, s);
+        m[1] = OrientationVectorType(-s, c);
 
-        m[2][0] = origin.x - ((origin.x * m[0][0]) + (origin.y * m[1][0]));
-        m[2][1] = origin.y - ((origin.x * m[0][1]) + (origin.y * m[1][1]));
+        t.x = origin.x - ((origin.x * m[0][0]) + (origin.y * m[1][0]));
+        t.y = origin.y - ((origin.x * m[0][1]) + (origin.y * m[1][1]));
     }
 
-    void setAsScale(ScalarType scale)
+    void setAsScale(OrientationType scale)
     {
-        m[0][0] = scale;
-        m[0][1] = 0.f;
-        m[1][0] = 0.f;
-        m[1][1] = scale;
-        m[2][0] = 0.f;
-        m[2][1] = 0.f;
+        m[0] = OrientationVectorType(scale, 0);
+        m[1] = OrientationVectorType(0, scale);
+        t = TranslationVectorType(0, 0);
     }
 
-    void setTranslation(const Vector2Type& translation)
+    void setTranslation(const TranslationVectorType& translation)
     {
-        m[2][0] = translation.x;
-        m[2][1] = translation.y;
+        t = translation;
     }
 
-    void translate(const Vector2Type& translation)
+    void translate(const TranslationVectorType& translation)
     {
-        m[2][0] += translation.x;
-        m[2][1] += translation.y;
+        t += translation;
     }
 
     Transform2D& operator*=(const Transform2D& b)
@@ -84,30 +75,49 @@ struct Transform2D
         m[1][0] = (a.m[1][0] * b.m[0][0]) + (a.m[1][1] * b.m[1][0]);
         m[1][1] = (a.m[1][0] * b.m[0][1]) + (a.m[1][1] * b.m[1][1]);
 
-        m[2][0] = (a.m[2][0] * b.m[0][0]) + (a.m[2][1] * b.m[1][0]) + b.m[2][0];
-        m[2][1] = (a.m[2][0] * b.m[0][1]) + (a.m[2][1] * b.m[1][1]) + b.m[2][1];
+        t.x = (a.t.x * b.m[0][0]) + (a.t.y * b.m[1][0]) + b.t.x;
+        t.y = (a.t.x * b.m[0][1]) + (a.t.y * b.m[1][1]) + b.t.y;
+        return *this;
+    }
+
+    Transform2D& operator*=(OrientationType scale)
+    {
+        m[0] *= scale;
+        m[1] *= scale;
+        t *= scale;
 
         return *this;
     }
 
-    Transform2D& operator*=(ScalarType scale)
+    template<typename T>
+    void transformVector(Vector2<T>& result, const Vector2<T>& v) const
     {
-        m[0][0] *= scale;
-        m[0][1] *= scale;
-        m[1][0] *= scale;
-        m[1][1] *= scale;
-        m[2][0] *= scale;
-        m[2][1] *= scale;
-
-        return *this;
+        result.x = (v.x * m[0][0]) + (v.y * m[1][0]) + t.x;
+        result.y = (v.x * m[0][1]) + (v.y * m[1][1]) + t.y;
     }
 
-    void transformVector(Vector2Type& result, const Vector2Type& v) const
+    template<typename T>
+    void rotateVector(Vector2<T>& result, const Vector2<T>& v) const
     {
-        result.x = (v.x * m[0][0]) + (v.y * m[1][0]) + m[2][0];
-        result.y = (v.x * m[0][1]) + (v.y * m[1][1]) + m[2][1];
+        result.x = (v.x * m[0][0]) + (v.y * m[1][0]);
+        result.y = (v.x * m[0][1]) + (v.y * m[1][1]);
+    }
+
+    void orthonormalInvert(Transform2D& outTransform) const
+    {
+        // Transpose the orientation
+        outTransform.m[0][0] = m[0][0];
+        outTransform.m[0][1] = m[1][0];
+        outTransform.m[1][0] = m[0][1];
+        outTransform.m[1][1] = m[1][1];
+
+        // Calculate the inverted translation
+        const TranslationVectorType negTrans(-t);
+        outTransform.t.x = (negTrans.x * outTransform.m[0][0]) + (negTrans.y * outTransform.m[1][0]);
+        outTransform.t.y = (negTrans.x * outTransform.m[0][1]) + (negTrans.y * outTransform.m[1][1]);
     }
 };
 
-typedef Transform2D<float> FloatTransform2D;
-typedef Transform2D<FixedPoint<3,16,int32_t,int32_t,false> > FixedTransform2D;
+typedef Transform2D<float, float> FloatTransform2D;
+typedef Transform2D<FixedPoint<3,16,int32_t,int32_t,false>,
+                    FixedPoint<3,16,int32_t,int32_t,false> > FixedTransform2D;

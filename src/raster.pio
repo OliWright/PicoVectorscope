@@ -51,54 +51,54 @@
 .side_set 2 ; Latch triggers for X-DAC and Y-DAC
 
 start:
-    // Shift out the 12 x bits
+    ; Shift out the 12 x bits
     out x, 12           side 3  [0]
     jmp !x set_y        side 3  [0]
 
 .wrap_target
-    // Put the X-DAC value on the pins and keep the X-DAC CS
-    // high for at least 4 cycles for the value to settle.
+    ; Put the X-DAC value on the pins and keep the X-DAC CS
+    ; high for at least 4 cycles for the value to settle.
     mov pins, x         side 3  [1]
-    // Shift out the 4-bits for the hold delay
+    ; Shift out the 4-bits for the hold delay
     out y, 4            side 3  [0]
 
-    jmp y-- hold        side 3  [0] // Jump to the hold loop if we're holding
+    jmp y-- hold        side 3  [0] ; Jump to the hold loop if we're holding
 
-    // From now on, we pull the X-DAC CS pin low, latching
-    // in the new X coordinate.
-    // Hold it low for at least 4 cycles
+    ; From now on, we pull the X-DAC CS pin low, latching
+    ; in the new X coordinate.
+    ; Hold it low for at least 4 cycles
 
-    // Don't incur an additional delay for hold 0, beyond
-    // that required to hold CS low for 4 cycles
+    ; Don't incur an additional delay for hold 0, beyond
+    ; that required to hold CS low for 4 cycles
     jmp next_x          side 2  [1]
 
-    // Delay loop for holds > 0
-    // This delay is linear.
-    // It would be better if we could make it non-linear somehow.
+    ; Delay loop for holds > 0
+    ; This delay is linear.
+    ; It would be better if we could make it non-linear somehow.
 hold:
     jmp y-- hold        side 2  [5]
 
 next_x:
-    // Shift out the next 12 x bits
-    // while keeping the X-DAC CS pin low
+    ; Shift out the next 12 x bits
+    ; while keeping the X-DAC CS pin low
     out x, 12           side 2  [0]
     jmp !x set_y        side 2  [0]
 .wrap
 
 set_y:
-    // Drain the 4 unused bits in the 16-bit command
+    ; Drain the 4 unused bits in the 16-bit command
     out y, 4            side 3  [0]
-    // Make sure they were zero too
+    ; Make sure they were zero too
     jmp !y really_set_y side 3  [0]
-    // They weren't!  This was actually an x value of zero.  Oh well.
+    ; They weren't!  This was actually an x value of zero.  Oh well.
     jmp start           side 3  [0]
 really_set_y:   
-    // Read the y coord 
-    out pins, 12        side 3  [3] // Delay to settle
-    // Drain the 4 unused bits in the 16-bit command
+    ; Read the y coord 
+    out pins, 12        side 3  [3] ; Delay to settle
+    ; Drain the 4 unused bits in the 16-bit command
     out y, 4            side 1  [3]
-    // Set X to zero to do horizontal blank.
-    // The DACs need a bit longer to settle for large changes
+    ; Set X to zero to do horizontal blank.
+    ; The DACs need a bit longer to settle for large changes
     mov pins, NULL      side 3  [3]
     nop                 side 2  [7]
     jmp start           side 2  [7]

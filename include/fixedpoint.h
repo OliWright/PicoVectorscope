@@ -61,6 +61,7 @@ typedef unsigned int uint;
 
 constexpr float kPi = 3.14159265358979323846f;
 constexpr float k2Pi = kPi * 2.f;
+constexpr float kPiOver2 = kPi * 0.5f;
 
 // This will shift right if shift is +ve, or shift left is shift is -ve
 template <typename T>
@@ -227,6 +228,11 @@ public:
         return IntermediateType((IntermediateStorageType)(getStorage() * rhs));
     }
 
+    constexpr IntermediateType operator*(uint rhs) const
+    {
+        return IntermediateType((IntermediateStorageType)(getStorage() * rhs));
+    }
+
     constexpr IntermediateType operator*(float rhs) const { return *this * IntermediateType(rhs); }
 
     template <typename T>
@@ -235,15 +241,20 @@ public:
         return Mul<kNumWholeBits, T::kNumWholeBits>(*this, rhs);
     }
 
+    constexpr IntermediateType operator/(int rhs) const
+    {
+        return IntermediateType((IntermediateStorageType)((IntermediateStorageType)getStorage() / rhs));
+    }
+
+    constexpr IntermediateType operator/(uint rhs) const
+    {
+        return IntermediateType((IntermediateStorageType)((IntermediateStorageType)getStorage() / rhs));
+    }
+
     template <typename T>
     constexpr IntermediateType operator/(const T& rhs) const
     {
         return Div<kNumWholeBits>(*this, rhs);
-    }
-
-    constexpr IntermediateType operator/(int rhs) const
-    {
-        return IntermediateType((IntermediateStorageType)((IntermediateStorageType)getStorage() / rhs));
     }
 
     constexpr IntermediateType operator>>(int rhs) const
@@ -306,6 +317,12 @@ public:
     constexpr bool operator>=(const T& rhs) const
     {
         return m_storage >= FixedPoint(rhs).getStorage();
+    }
+
+    template <typename T>
+    constexpr bool operator==(const T& rhs) const
+    {
+        return m_storage == FixedPoint(rhs).getStorage();
     }
 
     template <typename T>

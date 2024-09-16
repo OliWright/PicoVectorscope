@@ -172,3 +172,18 @@ void Shape3D::Draw(DisplayList& displayList,
         previousPoint = b;
     }
 }
+
+void Shape3D::DrawPoint(DisplayList& displayList,
+                        const StandardFixedTranslationVector& pos,
+                        const Camera& camera,
+                        Intensity intensity)
+{
+    StandardFixedTranslationVector viewSpacePos;
+    camera.GetWorldToClip().transformVector(viewSpacePos, pos);
+    if(clipPoint(viewSpacePos) == 0)
+    {
+        DisplayListVector2 screenPos;
+        projectPoint(screenPos, viewSpacePos);
+        displayList.PushPoint(screenPos, intensity);
+    }
+}

@@ -25,7 +25,7 @@
 static constexpr uint kBurnFadeLength = 8;
 static constexpr BurnLength kBurnBoostMultiplier = 3.f / kBurnFadeLength;
 
-static inline void pushVector(DisplayList& displayList, const FixedTransform2D::Vector2Type& point, Intensity intensity)
+static inline void pushVector(DisplayList& displayList, const FixedTransform2D::TranslationVectorType& point, Intensity intensity)
 {
     DisplayListVector2 displayPoint(saturate(point.x), saturate(point.y));
     displayList.PushVector(displayPoint, intensity);
@@ -53,14 +53,14 @@ void PushShapeToDisplayList(DisplayList& displayList,
                             const FixedTransform2D& transform,
                             BurnLength burnLength)
 {
-    FixedTransform2D::Vector2Type point0;
+    FixedTransform2D::TranslationVectorType point0;
     transform.transformVector(point0, points[0]);
     pushVector(displayList, point0, Intensity(0.f));
     BurnLength burnBoost = 0;
-    FixedTransform2D::Vector2Type previousPoint = point0;
+    FixedTransform2D::TranslationVectorType previousPoint = point0;
     for (uint i = 1; i < numPoints; ++i)
     {
-        FixedTransform2D::Vector2Type point;
+        FixedTransform2D::TranslationVectorType point;
         transform.transformVector(point, points[i]);
         if(burnLength != 0)
         {
@@ -120,10 +120,10 @@ void Fragment::Move()
     SinTable::SinCos(m_rotationSpeed, s, c);
     transform.setAsRotation(s, c);
 
-    FixedTransform2D::Vector2Type dir;
+    FixedTransform2D::OrientationVectorType dir;
     dir.x = m_normalisedLineDirection.x;
     dir.y = m_normalisedLineDirection.y;
-    FixedTransform2D::Vector2Type newDir;
+    FixedTransform2D::OrientationVectorType newDir;
     transform.transformVector(newDir, dir);
     m_normalisedLineDirection.x = newDir.x;
     m_normalisedLineDirection.y = newDir.y;
@@ -145,7 +145,7 @@ uint32_t FragmentShape(const ShapeVector2* points,
     }
     uint32_t numFragments = 0;
 
-    FixedTransform2D::Vector2Type fPoint;
+    FixedTransform2D::TranslationVectorType fPoint;
     transform.transformVector(fPoint, points[0]);
     DisplayListVector2 point0(saturate(fPoint.x), saturate(fPoint.y));
     DisplayListVector2 previousPoint = point0;

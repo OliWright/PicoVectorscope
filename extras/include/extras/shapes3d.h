@@ -64,6 +64,11 @@ public:
               const Camera& camera,
               Intensity intensity = 1) const;
     
+    static void DrawPoint(DisplayList& displayList,
+                          const StandardFixedTranslationVector& pos,
+                          const Camera& camera,
+                          Intensity intensity = 1);
+
 private:
     const StandardFixedTranslationVector* m_points;
     uint                                  m_numPoints;

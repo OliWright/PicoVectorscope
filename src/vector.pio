@@ -45,26 +45,44 @@
 
 .wrap_target
 public next_value:
-    // Fetch the next 32 bit value from the TX FIFO into OSR
-    //pull block          side 7
+    ; Pause
+    ; We run this SM program at full frequency, but
+    ; slow it down by inserting  a delay here.
+    ; We do this is so that the x and y DACs
+    ; are updated as close together as possible.
+    ; The length of this delay is tuned to match the
+    ; ability of the c++ code to fill the buffers.
+    ; We want to output values as fast as we can to
+    ; the DACs, but no faster than we can generate them.
+    ;
+    ; Timing of the loop with no z updates is 16 cycles
+    ; Here we have an additional delay of 20 cycles
+    ; which means we'll be updating the DACs at
+    ; about 4.17Mz - but it means we need to be able
+    ; to fill the buffers at faster than this rate.
+    nop                 side 7  [3]
+    nop                 side 7  [3]
+    nop                 side 7  [3]
+    nop                 side 7  [3]
+    nop                 side 7  [3]
 
-    // Shift out the X value bits to the DAC from the OSR
-    out pins, 12        side 7  [1]
-    nop                 side 6  [1]
+    ; Shift out the X value bits to the DAC from the OSR
+    out pins, 12        side 7  [3]
+    nop                 side 6  [3] ; Latch the x DAC
 
-    // Shift out the Y value bits to the DAC from the OSR
-    // And the Z value bits into the y register
-    out pins, 12        side 7  [0]
+    ; Shift out the Y value bits to the DAC from the OSR
+    ; And the Z value bits into the y register
+    out pins, 12        side 7  [2]
     out y, 8            side 7  [0]
-    nop                 side 5  [0]
-    // Skip the DAC output of Z if it's not changed
+    nop                 side 5  [2] ; Latch the y DAC
+    ; Skip the DAC output of Z if it's not changed
     jmp x!=y write_z    side 5  [0]
 .wrap
 
 public write_z:
     // Write the Z value out to the pins and save it in
     // the x register
-    mov pins, y         side 7  [0]
+    mov pins, y         side 7  [2]
     mov x, y            side 7  [0]
-    nop                 side 3  [0]
+    nop                 side 3  [2] ; Latch the z DAC
     jmp next_value      side 3  [0]

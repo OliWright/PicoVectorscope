@@ -43,7 +43,8 @@ public:
     // Calculate to update the internal fields.
     void Calculate()
     {
-        m_cameraToWorld.orthonormalInvert(m_worldToClip);
+        m_cameraToWorld.orthonormalInvert(m_worldToCamera);
+        m_worldToClip = m_worldToCamera;
         StandardFixedOrientationScalar scale = m_aspectRatio * m_recipTanHalfVerticalFOV;
         m_worldToClip.m[0][0] *= scale;
         m_worldToClip.m[1][0] *= scale;
@@ -57,6 +58,9 @@ public:
 
     const StandardFixedTranslationVector& GetPosition() const { return m_cameraToWorld.t; }
 
+    const FixedTransform3D& GetCameraToWorld() const { return m_cameraToWorld; }
+    const FixedTransform3D& GetWorldToCamera() const { return m_worldToCamera; }
+
     // The worldToClip transform is used to transform points from world space to
     // clip space.
     // Clip space is arranged so that the clip planes are at a nice 45 degrees
@@ -65,6 +69,7 @@ public:
 
 private:
     FixedTransform3D               m_cameraToWorld;
+    FixedTransform3D               m_worldToCamera;
     FixedTransform3D               m_worldToClip;
     StandardFixedOrientationScalar m_aspectRatio = 3.f / 4.f;
     StandardFixedOrientationScalar m_recipTanHalfVerticalFOV = 1.f;

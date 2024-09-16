@@ -242,16 +242,27 @@ void displayListUpdateTask()
     }
 }
 
+void doNothing()
+{
+}
+
 int main()
 {
+    multicore_reset_core1();
+    multicore_launch_core1(doNothing);
+    multicore_reset_core1();
+
     Serial::Init();
     Log::Init();
     LedStatus::Init();
-    LedStatus::SetStep(0, LedStatus::Brightness(1.f), 400);
-    LedStatus::SetStep(1, LedStatus::Brightness(0.f), 100);
-    LedStatus::SetStep(3, LedStatus::Brightness(0.f), 100);
-    LedStatus::SetStep(5, LedStatus::Brightness(0.f), 100);
-    LedStatus::SetStep(7, LedStatus::Brightness(0.f), 800);
+    LedStatus::SetStep(0, LedStatus::Brightness(1.f), 400); // Initial full-bright pulse
+    LedStatus::SetStep(1, LedStatus::Brightness(0.f), 100); // Gap
+    // Slot 2 is for the high level demo core load
+    LedStatus::SetStep(3, LedStatus::Brightness(0.f), 100); // Gap
+    // Slot 4 is for the DisplayList code load
+    LedStatus::SetStep(5, LedStatus::Brightness(0.f), 100); // Gap
+    // Slot 6 is for the DMA load
+    LedStatus::SetStep(7, LedStatus::Brightness(0.f), 800); // Big gap
 
     Buttons::Init();
 
