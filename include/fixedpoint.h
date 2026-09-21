@@ -224,7 +224,7 @@ public:
 
     constexpr IntermediateType operator*(int rhs) const
     {
-        return IntermediateType((IntermediateStorageType)(getStorage() * rhs));
+        return IntermediateType((IntermediateStorageType)getStorage() * (IntermediateStorageType)rhs);
     }
 
     constexpr IntermediateType operator*(float rhs) const { return *this * IntermediateType(rhs); }
