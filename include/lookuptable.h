@@ -13,7 +13,7 @@
 // GNU General Public License for more details.
 //
 // A copy of the GNU General Public License can be found in the file
-// COPYING.txt in the root of this project.
+// LICENSE.txt in the root of this project.
 // If not, see <https://www.gnu.org/licenses/>.
 
 // For an example of usage, see sintable.h
