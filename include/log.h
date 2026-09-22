@@ -15,6 +15,8 @@
 // A copy of the GNU General Public License can be found in the file
 // LICENSE.txt in the root of this project.
 // If not, see <https://www.gnu.org/licenses/>.
+//
+// oli.wright.github@gmail.com
 
 // Simple logging to stdout.  To use, first declare a channel...
 //

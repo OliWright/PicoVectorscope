@@ -15,6 +15,8 @@
 // A copy of the GNU General Public License can be found in the file
 // LICENSE.txt in the root of this project.
 // If not, see <https://www.gnu.org/licenses/>.
+//
+// oli.wright.github@gmail.com
 
 #include "fixedpoint.h"
 #include "log.h"
@@ -227,8 +229,8 @@ int32_t FixedPointSqrt(int32_t inValue, int32_t numFractionalBits)
                 // by 16, so we have to add 1 to result manually and
                 // adjust 'num' accordingly.
                 // num = a - (result + 0.5)^2
-                //	 = num + result^2 - (result + 0.5)^2
-                //	 = num - result - 0.5
+                //    = num + result^2 - (result + 0.5)^2
+                //    = num - result - 0.5
                 num -= result;
                 num = (num << 16) - 0x8000;
                 result = (result << 16) + 0x8000;
