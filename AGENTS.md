@@ -11,8 +11,9 @@ at high refresh rates. It is a work-in-progress.
 
 This repo is a **framework, not a standalone application**. There is no
 top-level CMakeLists.txt here; it is consumed by application projects
-(e.g. PicoVectorscopeExamples) which include the `pico_sdk` and the two `.cmake`
-include files. Do not add a build system, `main()`, or tests to this repo.
+(e.g. PicoVectorscopeExamples) which include `pico_sdk_import.cmake` for
+SDK location/fetching, then the `pico_sdk` and the two `.cmake` include
+files. Do not add a build system, `main()`, or tests to this repo.
 
 ## Repository layout
 
@@ -25,7 +26,13 @@ extras/
     include/extras/  Optional add-ons: bitmap, bitmapfont (font8x8 submodule
                       in extras/src/font8x8), tilemap, shapes3d (camera).
     extras.cmake
-vectorscope.cmake   CMake include file: PIO generation, sources, link libs.
+vectorscope.cmake   CMake include file: minimum-SDK check, PIO generation,
+                    sources, link libs.
+pico_sdk_import.cmake  SDK bootstrap (locate / fetch from git) provided for
+                    consuming projects to replace their own copy. Must be
+                    included before project(); ends by including the SDK's
+                    pico_sdk_init.cmake. Keep in sync with upstream pico-sdk's
+                    external/pico_sdk_import.cmake.
 STYLE.md      Code style guide (authoritative — see below).
 LICENSE.txt   GPL-3.0+.
 ```
