@@ -41,6 +41,15 @@ if (DEFINED ENV{PICO_SDK_FETCH_FROM_GIT_PATH} AND (NOT PICO_SDK_FETCH_FROM_GIT_P
     message("Using PICO_SDK_FETCH_FROM_GIT_PATH from environment ('${PICO_SDK_FETCH_FROM_GIT_PATH}')")
 endif ()
 
+# A bare 'cmake ..' should just work: if no SDK location was provided at all
+# (not via env var, -D, or a pre-existing cache entry), default to fetching the
+# SDK from git. This must be tested before the variables are turned into cache
+# entries below, since that would otherwise make them always DEFINED.
+if (NOT PICO_SDK_PATH AND (NOT DEFINED PICO_SDK_FETCH_FROM_GIT))
+    message(STATUS "PICO_SDK_PATH not set; defaulting to PICO_SDK_FETCH_FROM_GIT=ON")
+    set(PICO_SDK_FETCH_FROM_GIT ON)
+endif ()
+
 set(PICO_SDK_PATH "${PICO_SDK_PATH}" CACHE PATH "Path to the Raspberry Pi Pico SDK")
 set(PICO_SDK_FETCH_FROM_GIT "${PICO_SDK_FETCH_FROM_GIT}" CACHE BOOL
         "Set to ON to fetch copy of SDK from git if not otherwise locatable")

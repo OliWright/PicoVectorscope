@@ -31,8 +31,9 @@ vectorscope.cmake   CMake include file: minimum-SDK check, PIO generation,
 pico_sdk_import.cmake  SDK bootstrap (locate / fetch from git) provided for
                     consuming projects to replace their own copy. Must be
                     included before project(); ends by including the SDK's
-                    pico_sdk_init.cmake. Keep in sync with upstream pico-sdk's
-                    external/pico_sdk_import.cmake.
+                    pico_sdk_init.cmake. If no SDK location is given it
+                    defaults to fetching from git. Keep in sync with upstream
+                    pico-sdk's external/pico_sdk_import.cmake.
 STYLE.md      Code style guide (authoritative — see below).
 LICENSE.txt   GPL-3.0+.
 ```
