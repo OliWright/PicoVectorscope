@@ -18,6 +18,104 @@
 // If not, see <https://www.gnu.org/licenses/>.
 //
 // oli.wright.github@gmail.com
+//
+// ============================================================================
+//  HOW DATA GETS FROM THE CPU TO THE DAC PINS
+// ============================================================================
+//
+//  There are two FIFOs in series, and DMA bridges a big RAM buffer into the
+//  small one while the PIO state machine drains that:
+//
+//     CPU                       DMA                       PIO SM          hardware
+//     ───                       ───                       ──────          ────────
+//     PIO    ┌───────────────────────────┐            ┌───────────┐
+//     words──┤ Buffer 0   4096 words     │            │ TX FIFO   │   latches   12-bit DAC
+//            │ Buffer 1   4096 words     ├──── DMA ──►│ (8 words) ├────────────► video out
+//            │ Buffer 2   4096 words     │            └───────────┘           (12 pins)
+//            └───────────────────────────┘
+//
+//  • s_buffers[] — 3 x 4096-word RAM buffers (kNumBuffers / kNumEntriesPerBuffer).
+//    A single frame (built by DisplayList::OutputToDACs) typically fills many of
+//    these in turn. AllocateBufferSpace() hands the CPU a pointer into the
+//    "current" buffer so it keeps filling the rest of the frame while the DMA is
+//    busy draining the earlier ones -- that's the double/triple buffering. Each
+//    buffer is flushed (handed to DMA) when it fills up or on the final flush
+//    of the frame (DisplayList.cpp: DacOutput::Flush(true)).
+//
+//  • TX FIFO     — a single 8-word FIFO on the SM, made by joining its two 4-word
+//    TX+RX FIFOs (sm_config_set_fifo_join(PIO_FIFO_JOIN_TX), see dacoutputsm.cpp).
+//    The SM pulls one word out per loop of the PIO program (an IN each iteration,
+//    gated by stalls on sideset/pins/FIFO), so the drain rate is paced by program
+//    iteration, not by the raw SM clock.
+//
+//  • Backpressure — the buffer DMA channel is given dreq = the SM's "TX not full"
+//    signal (pio_get_dreq(..., true) in DmaChannel::Configure). The DMA therefore
+//    only pushes a word when there's room in the 8-word FIFO, so a 4096-word buffer
+//    is fed in perfectly lockstep with the SM and can never overflow it.
+//
+// ----------------------------------------------------------------------------
+//  THE DMA CHANNELS (there is no single DMA channel, it's a little state machine)
+// ----------------------------------------------------------------------------
+//
+//    1 global  +  2 per buffer  =  7 channels:
+//
+//      MAIN(i)   buffer[i] (4096 words) ──► SM TX FIFO        [dreq-paced]
+//      CHAIN(i)  copies i's live config into SPIN's ctrl_trig, [1 word]
+//                then fires SPIN
+//      SPIN      the shared 1-word "heartbeat" that everything hops through.
+//                NOTE: SPIN's own data transfer (scratch -> scratch) is a pure
+//                no-op -- see s_chainSpinDmaRead/Write below. Its entire job is to
+//                be the re-routable hub: CHAIN(i) rewrites SPIN's config (and thus
+//                its chain_to) on every hop, and SPIN follows it.
+//
+// ----------------------------------------------------------------------------
+//  THE SPIN (a.k.a. the DMA "jump-to-self" / self-chaining)
+// ----------------------------------------------------------------------------
+//
+//  We never want the DMA to simply deassert and go idle between frames; we want
+//  it to stay *hot* so the first real transfer starts instantly. It stays hot by
+//  idling *inside the chain*: SPIN keeps re-firing a 1-word ping, and the config
+//  it was most recently given decides where it chains to next. CHAIN(i) feeds
+//  that config to SPIN every hop, so a buffer can be either still spinning,
+//  or armed to be kicked.
+//
+//  The two configs a buffer can hand SPIN (DmaChannel::m_chainSpinSpinConfig vs
+//  m_chainSpinEnableConfig, switched via Enable()/Disable()):
+//
+//    SPINNING (buffer not ready -- DMA busy-loops, does nothing useful):
+//
+//        ┌─────────┐  write live cfg   ┌─────────┐
+//        │ CHAIN(i)├────to SPIN's─────►│  SPIN   │
+//        └─────────┘  ctrl_trig(1w)    │ (1 word)│
+//             ▲                        └────┬────┘
+//             └────── chain_to = CHAIN(i) ◄─┘  (spinning cfg)
+//                keeps looping: CHAIN(i) ─► SPIN ─► CHAIN(i) ─► ...
+//
+//    KICKED (buffer armed via Enable() -- SPIN re-routes into the real work):
+//
+//        ┌─────────┐  write enable cfg ┌─────────┐  chain_to    ┌─────────┐
+//        │ CHAIN(i)├────to SPIN's─────►│  SPIN   ├──MAIN(i)────►│ MAIN(i) │
+//        └─────────┘  ctrl_trig(1w)    │ (1 word)│              │ 4096wrd │
+//                                      └─────────┘              └────┬────┘
+//                                                                    │ dreq ─► SM TX FIFO(8) ─► DAC pins
+//                                                                    │ done ─► chains to CHAIN(i+1)
+//                                                                    └─► CHAIN(i+1) ─► SPIN ─► (kick or spin i+1)
+//
+//  In other words the DMA never parks: it either spins in place (the 1-word ping
+//  loop, where SPIN is re-wired to chain back around to its own CHAIN) or it hands
+//  off to MAIN(i), which streams the entire buffer into the 8-word TX FIFO at the
+//  SM's pace and then chains to the next buffer's CHAIN. The "jump-to-self" is
+//  exactly that: when a buffer is not armed, the tail of the chain is pointed at
+//  its own CHAIN(i) so the DMA idles *in the chain* instead of being released, and
+//  the moment Enable() flips the live config the very next SPIN hop re-routes the
+//  whole chain into the real transfer.
+//
+//  Kick/pipeline timing: Init() arms nothing and starts SPIN on buffer 0's CHAIN
+//  (the s_dmaIsRunning == false "spinning" state). Flush() queues each filled
+//  buffer, and only once s_numBuffersToQueueBeforeKick of them are queued (or on
+//  the final flush of a frame) does it call configurePioAndStartDma() on the first
+//  queued buffer to kick the chain; checkDmaStatus() then watches for completion
+//  and re-kicks the next buffer when its SM program differs (a chain "break").
 
 #include "log.h"
 #include "dacout.h"
@@ -73,9 +171,19 @@ void DacOutput::Init(const DacOutputPioSmConfig& idleSm)
     //channel_config_set_chain_to(&s_dmaChainSpinConfigTemplate, 0);
     dma_channel_set_irq0_enabled(s_dmaChainSpinChannelIdx, false);
     // Setup the channel
+    //
+    // NOTE on src/dst: the 1-word copy between the two scratch words
+    // (s_chainSpinDmaRead -> s_chainSpinDmaWrite) is a vestigial no-op.
+    // s_chainSpinDmaWrite is never read and the value in s_chainSpinDmaRead
+    // is never observed, so the transfer does nothing useful. A DMA channel
+    // still *requires* a src/dst pair though, so we point it at two harmless
+    // scratch variables. The channel's ONLY real job is to be the shared hub
+    // whose config (chain_to) is rewritten by the per-buffer CHAIN channels
+    // when they fire into its ctrl_trig, and then to follow that new config.
+    // See the "SPIN" ASCII art at the top of this file.
     dma_channel_configure(s_dmaChainSpinChannelIdx, &s_dmaChainSpinConfigTemplate,
-                          &s_chainSpinDmaWrite, // Write to here
-                          &s_chainSpinDmaRead, // Read from here
+                          &s_chainSpinDmaWrite, // Write to here (scratch, never read)
+                          &s_chainSpinDmaRead,  // Read from here (scratch, value unused)
                           1,
                           false // don't start yet
     );
@@ -208,7 +316,7 @@ void DacOutput::Flush(bool finalFlushForFrame)
         // so that it chains automatically
         LOG_INFO(DacOutputSynchronisation, "Flush Chained %d\n", s_currentBufferIdx);
         dmaChannel.Enable();
-        s_chainSpinDmaRead = s_currentBufferIdx;
+        s_chainSpinDmaRead = s_currentBufferIdx; // vestigial: value is never read back
     }
     else
     {
@@ -225,7 +333,7 @@ void DacOutput::Flush(bool finalFlushForFrame)
         const uint32_t kickBufferIdx = (s_currentBufferIdx + kNumBuffers - s_numDmaChannelsQueued + 1) % kNumBuffers;
         LOG_INFO(DacOutputSynchronisation, "Flush Kick %d\n", kickBufferIdx);
         configurePioAndStartDma(s_dmaChannels[kickBufferIdx]);
-        s_chainSpinDmaRead = kickBufferIdx;
+        s_chainSpinDmaRead = kickBufferIdx;  // vestigial: value is never read back
         s_dmaIsRunning = true;
         s_numBuffersToQueueBeforeKick = 1; // Don't wait anymore for multiple buffers to be filled
     }
